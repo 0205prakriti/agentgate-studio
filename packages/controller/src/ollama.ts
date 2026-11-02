@@ -19,6 +19,8 @@ export interface OpenedModel {
   model: Model<Api>;
   streamFn: StreamFn;
   getApiKey: (provider: string) => string | undefined;
+  /** Turns a raw provider failure into text that is safe to store and show. */
+  describeError: (raw: string) => string;
 }
 export interface AgentModels {
   open(ref: ModelRef): Promise<OpenedModel>;
@@ -53,6 +55,8 @@ export class OllamaCatalog implements AgentModels {
   }
 
   async open(ref: ModelRef): Promise<OpenedModel> {
+    if (ref.provider !== 'ollama')
+      throw new Error(`Provider ${ref.provider} is not served by Ollama.`);
     const installed = await this.listInstalled();
     if (!installed.includes(ref.modelId))
       throw new Error(`Model ${ref.modelId} is not installed in Ollama.`);
@@ -91,6 +95,7 @@ export class OllamaCatalog implements AgentModels {
         registry.streamSimple(target, context, options),
       // Ollama is keyless; Pi requires a non-empty value for the request.
       getApiKey: () => 'ollama',
+      describeError: (raw) => raw.slice(0, 300),
     };
   }
 }

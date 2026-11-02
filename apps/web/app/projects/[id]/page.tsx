@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { projectIdSchema } from '@agentgate/controller';
-import { ollama, projects, sessions } from '@/lib/controller';
+import { cloud, ollama, projects, sessions } from '@/lib/controller';
 import { StartSession } from '@/components/start-session';
 import { Button } from '@/components/ui/button';
 export const dynamic = 'force-dynamic';
@@ -22,6 +22,25 @@ export default async function ProjectPage({
       models: null,
       error: error instanceof Error ? error.message : 'Ollama is unavailable.',
     }));
+  const cloudStatus = await cloud().status();
+  const groups = [
+    ...(installed.models?.length
+      ? [
+          {
+            label: 'Ollama (local)',
+            provider: 'ollama',
+            models: installed.models,
+          },
+        ]
+      : []),
+    ...cloudStatus
+      .filter((entry) => entry.configured)
+      .map((entry) => ({
+        label: `${entry.provider} (cloud)`,
+        provider: entry.provider,
+        models: entry.models,
+      })),
+  ];
   return (
     <>
       <Link href="/" className="text-sm text-teal-800 hover:underline">
@@ -79,20 +98,22 @@ export default async function ProjectPage({
             ))}
           </ul>
         )}
-        <div className="mt-6">
-          {installed.models ? (
-            installed.models.length > 0 ? (
-              <StartSession projectId={project.id} models={installed.models} />
-            ) : (
-              <p className="text-sm text-stone-700">
-                Ollama is running but has no models. Run{' '}
-                <code>ollama pull qwen2.5:0.5b</code> and reload.
-              </p>
-            )
+        <div className="mt-6 space-y-4">
+          {installed.error && (
+            <p className="text-sm text-stone-700">
+              {installed.error} Start it with <code>ollama serve</code> to use
+              local models.
+            </p>
+          )}
+          {groups.length > 0 ? (
+            <StartSession projectId={project.id} groups={groups} />
           ) : (
             <p role="alert" className="text-sm text-red-800">
-              {installed.error} Start it with <code>ollama serve</code> and
-              reload.
+              No models are available. Pull an Ollama model or{' '}
+              <Link href="/models" className="underline">
+                connect a cloud provider
+              </Link>
+              .
             </p>
           )}
         </div>

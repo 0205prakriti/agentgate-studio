@@ -13,7 +13,7 @@ test('project → real model session → streamed answer persists', async ({
     page.getByRole('heading', { name: 'E2E project' }),
   ).toBeVisible();
 
-  await page.getByLabel('Local model (Ollama)').selectOption(model as string);
+  await page.getByLabel('Model').selectOption(`ollama/${model}`);
   await page.getByRole('button', { name: 'Start session' }).click();
   await expect(
     page.getByRole('heading', { name: 'Agent session' }),
@@ -53,4 +53,23 @@ test('disconnected model service shows an actionable error', async ({
   await expect(page.getByText(/Ollama is not reachable/)).toContainText(
     'ollama serve',
   );
+});
+
+test('an invalid cloud API key is rejected with a sanitized message and not saved', async ({
+  page,
+}) => {
+  test.skip(
+    process.env.AGENTGATE_LIVE_CLOUD !== '1',
+    'Needs network access to the provider.',
+  );
+  const bogus = 'sk-invalid-0000000000000000';
+  await page.goto('/models');
+  await page.locator('#key-openai').fill(bogus);
+  await page.getByRole('button', { name: 'Test and save key' }).nth(1).click();
+  await expect(
+    page.getByText('The provider rejected the API key.'),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(bogus)).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText('Not connected', { exact: true })).toHaveCount(2);
 });

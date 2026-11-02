@@ -50,7 +50,9 @@ Browser end-to-end and mobile checks, restart recovery, invalid credentials, dis
 
 ## Status
 
-A1 and A2 are complete. A3 (cloud credentials), B, C, D, and E are planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+A1, A2, and A3 are complete (milestone A exit criteria met for local models; see the A3 limitation). B, C, D, and E are planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+
+A3 limitation: no valid paid cloud key was available, so a successful cloud connection and cloud run were not exercised; invalid-key rejection was verified live against Anthropic and OpenAI. Cloud providers are limited to Anthropic and OpenAI. Pi also honours provider environment variables such as `ANTHROPIC_API_KEY`; the Models page labels that source.
 
 A2 limitations: one model provider (Ollama); a cancel issued while a model is still being opened is ignored; the Ollama OpenAI-compatible endpoint uses Ollama's default context length.
 
@@ -71,3 +73,9 @@ No Git remote was supplied. Local commits are possible; hosted GitHub Actions ev
 - Controller tests (Pi's own faux provider for deterministic cases): streamed events, transcript replay into the next turn, restart reopen, model failure and unopenable model, hard timeout and cancel, interrupted-run recovery, corrupt transcript rejection, one active run per session.
 - Live integration (needs `AGENTGATE_OLLAMA_URL` and `AGENTGATE_OLLAMA_MODEL`): a real task through Pi and Ollama `qwen2.5:0.5b`, plus rejection of a model that is not installed.
 - Browser E2E (`npm run test:e2e`, `AGENTGATE_E2E_MODEL=<model>`): Chrome against the production server created a project, a session, streamed a real answer, and reloaded the persisted conversation. With Ollama unreachable the project page shows how to start it.
+
+## A3 verification evidence
+
+- Saved keys use a keychain-backed implementation of Pi's `CredentialStore`; nothing is written to SQLite or disk. A test round-trips a key through the real macOS keychain.
+- Adding a key sends one tiny request and saves only if the provider accepts it. Provider errors are mapped to a fixed vocabulary, so echoed key fragments never reach SQLite, the UI, or logs. The UI receives only the connected/not-connected state and source label.
+- Live (`AGENTGATE_LIVE_CLOUD=1`, no paid key needed): an invalid key is rejected by Anthropic and OpenAI with the sanitized message, and nothing is saved. The same flow passes in Chrome and the key is absent from the page.

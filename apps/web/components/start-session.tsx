@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 
 export function StartSession({
   projectId,
-  models,
+  groups,
 }: {
   projectId: string;
-  models: string[];
+  groups: { label: string; provider: string; models: string[] }[];
 }) {
   const [state, action, pending] = useActionState(startSession, {
     error: null,
@@ -16,19 +16,23 @@ export function StartSession({
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="projectId" value={projectId} />
-      <label htmlFor="modelId" className="block text-sm font-medium">
-        Local model (Ollama)
+      <label htmlFor="model" className="block text-sm font-medium">
+        Model
       </label>
       <select
-        id="modelId"
-        name="modelId"
+        id="model"
+        name="model"
         required
         className="w-full rounded-md border border-stone-300 bg-white px-3 py-3 outline-teal-700"
       >
-        {models.map((model) => (
-          <option key={model} value={model}>
-            {model}
-          </option>
+        {groups.map((group) => (
+          <optgroup key={group.provider} label={group.label}>
+            {group.models.map((model) => (
+              <option key={model} value={`${group.provider}/${model}`}>
+                {model}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
       {state.error && (

@@ -146,9 +146,8 @@ export class RunService {
       if (last.stopReason === 'aborted') return cancelled();
       if (last.stopReason === 'error')
         return fail(
-          (last.errorMessage ?? 'The model request failed.').slice(
-            0,
-            MAX_ERROR_LENGTH,
+          opened.describeError(
+            last.errorMessage ?? 'The model request failed.',
           ),
         );
       this.repository.appendEvent(run.id, 'completed', '');

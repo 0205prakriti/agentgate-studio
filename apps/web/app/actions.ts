@@ -9,7 +9,7 @@ import {
   runIdSchema,
   sendPromptSchema,
 } from '@agentgate/controller';
-import { projects, runs, sessions } from '@/lib/controller';
+import { cloud, projects, runs, sessions } from '@/lib/controller';
 
 export type CreateProjectState = { error: string | null };
 export async function createProject(
@@ -58,9 +58,15 @@ export async function startSession(
 ): Promise<StartSessionState> {
   if (!(await isLocalRequest()))
     return { error: 'Requests must come from this local workspace.' };
+  // Option values are `provider/modelId`; model ids may themselves contain slashes or colons.
+  const choice = String(form.get('model') ?? '');
+  const separator = choice.indexOf('/');
   const parsed = createSessionSchema.safeParse({
     projectId: form.get('projectId'),
-    model: { provider: 'ollama', modelId: form.get('modelId') },
+    model: {
+      provider: choice.slice(0, separator),
+      modelId: choice.slice(separator + 1),
+    },
   });
   if (!parsed.success) return { error: 'Choose an installed model.' };
   let id: string;
@@ -106,4 +112,47 @@ export async function cancelRun(runId: string): Promise<void> {
   if (!(await isLocalRequest())) return;
   const parsed = runIdSchema.safeParse(runId);
   if (parsed.success) runs().cancel(parsed.data);
+}
+
+export type ConnectState = { error: string | null; saved: boolean };
+export async function connectProvider(
+  _previous: ConnectState,
+  form: FormData,
+): Promise<ConnectState> {
+  if (!(await isLocalRequest()))
+    return {
+      error: 'Requests must come from this local workspace.',
+      saved: false,
+    };
+  try {
+    await cloud().connect(form.get('provider'), form.get('apiKey'));
+  } catch (error) {
+    // Messages from connect() are validation text or fixed provider-failure text, never raw provider output.
+    return {
+      error:
+        error instanceof Error
+          ? firstLine(error.message)
+          : 'The key could not be saved.',
+      saved: false,
+    };
+  }
+  revalidatePath('/models');
+  return { error: null, saved: true };
+}
+
+export async function disconnectProvider(form: FormData): Promise<void> {
+  if (!(await isLocalRequest())) return;
+  await cloud().disconnect(form.get('provider'));
+  revalidatePath('/models');
+}
+
+function firstLine(message: string): string {
+  try {
+    const issues: unknown = JSON.parse(message);
+    if (Array.isArray(issues) && issues[0]?.message)
+      return String(issues[0].message);
+  } catch {
+    // Not a validation error list: it is already plain text.
+  }
+  return message.slice(0, 200);
 }

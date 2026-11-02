@@ -59,6 +59,7 @@ function fauxModels() {
       streamFn: (target, context, options) =>
         registry.streamSimple(target, context, options),
       getApiKey: () => 'unused',
+      describeError: (raw) => raw,
     }),
   };
   return { faux, models };

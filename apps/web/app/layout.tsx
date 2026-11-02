@@ -17,17 +17,21 @@ export default function RootLayout({
               AGENTGATE{' '}
               <span className="font-normal text-stone-500">/ Studio</span>
             </Link>
-            <span className="rounded-full border border-stone-300 px-3 py-1 text-xs font-medium">
-              Local workspace
-            </span>
+            <nav className="flex items-center gap-4 text-sm">
+              <Link href="/models" className="hover:underline">
+                Models
+              </Link>
+              <span className="rounded-full border border-stone-300 px-3 py-1 text-xs font-medium">
+                Local workspace
+              </span>
+            </nav>
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-5 py-10 sm:px-10 sm:py-16">
           {children}
         </main>
         <footer className="mx-auto max-w-6xl px-5 py-8 text-xs text-stone-600 sm:px-10">
-          Phase 1 · Foundation in progress · Model execution and security
-          scanning are not connected.
+          Phase 1 · Foundation in progress · Security scanning is not connected.
         </footer>
       </body>
     </html>

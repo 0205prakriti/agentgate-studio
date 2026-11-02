@@ -2,9 +2,14 @@ import 'server-only';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
+  CloudCatalog,
+  KeychainBackend,
+  ModelRouter,
   OllamaCatalog,
   ProjectService,
   RunService,
+  SecretCredentialStore,
+  CLOUD_PROVIDERS,
   SessionService,
   SqliteProjects,
   SqliteSessions,
@@ -16,6 +21,7 @@ type Controller = {
   sessions: SessionService;
   runs: RunService;
   ollama: OllamaCatalog;
+  cloud: CloudCatalog;
 };
 const globalController = globalThis as typeof globalThis & {
   controller?: Controller;
@@ -34,13 +40,20 @@ function controller(): Controller {
     const projectRepository = new SqliteProjects(db);
     const sessionRepository = new SqliteSessions(db);
     const ollama = new OllamaCatalog(process.env.AGENTGATE_OLLAMA_URL);
-    const runs = new RunService(sessionRepository, ollama);
+    const cloud = new CloudCatalog(
+      new SecretCredentialStore(new KeychainBackend(), CLOUD_PROVIDERS),
+    );
+    const runs = new RunService(
+      sessionRepository,
+      new ModelRouter(ollama, cloud),
+    );
     runs.start();
     globalController.controller = {
       projects: new ProjectService(projectRepository),
       sessions: new SessionService(sessionRepository, projectRepository),
       runs,
       ollama,
+      cloud,
     };
   }
   return globalController.controller;
@@ -49,3 +62,4 @@ export const projects = () => controller().projects;
 export const sessions = () => controller().sessions;
 export const runs = () => controller().runs;
 export const ollama = () => controller().ollama;
+export const cloud = () => controller().cloud;

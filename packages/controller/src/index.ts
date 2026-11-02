@@ -8,8 +8,10 @@ export { openDatabase } from './database';
 export { SqliteProjects } from './sqlite-projects';
 export { SqliteSessions } from './sqlite-sessions';
 export {
+  CLOUD_PROVIDERS,
   SessionService,
   TERMINAL_STATUSES,
+  cloudProviderSchema,
   createSessionSchema,
   modelRefSchema,
   runIdSchema,
@@ -17,6 +19,7 @@ export {
   sessionIdSchema,
 } from './sessions';
 export type {
+  CloudProvider,
   ModelRef,
   Run,
   RunEvent,
@@ -27,5 +30,10 @@ export type {
 } from './sessions';
 export { OllamaCatalog, DEFAULT_OLLAMA_URL } from './ollama';
 export type { AgentModels, OpenedModel } from './ollama';
+export { CloudCatalog, apiKeySchema, describeProviderError } from './cloud';
+export type { ProviderStatus } from './cloud';
+export { KeychainBackend, SecretCredentialStore } from './credentials';
+export type { SecretBackend } from './credentials';
+export { ModelRouter } from './models';
 export { RunService } from './runner';
 export { isLocalHost, isLocalMutation } from './local-request';

@@ -50,9 +50,7 @@ Browser end-to-end and mobile checks, restart recovery, invalid credentials, dis
 
 ## Status
 
-A1–A3, B, C, and E's local checks are complete. D is implemented and verified locally; its exit criterion (an actual GitHub Actions run) and the demo step that shows a failing CI check are pending because no repository is connected. Known limitations are listed in the [README](../README.md#known-limitations).
-
-No Git remote was supplied. Hosted GitHub Actions evidence requires a configured repository and a pushed workflow.
+Milestones A1–A3, B, C, D, and E's local checks are complete, and CI has run on GitHub ([repository](https://github.com/Rizsaurav/agentgate-studio)). Known limitations are listed in the [README](../README.md#known-limitations). Remaining before declaring Phase 1 finished: a human rehearsal of the full demo, and a live-model (non-scripted) evaluation suite if wanted. Neither is required by the milestone exit criteria.
 
 ## A1 verification evidence
 
@@ -106,3 +104,10 @@ No Git remote was supplied. Hosted GitHub Actions evidence requires a configured
 - Scanner outage in the browser: referencing documents is refused with "security scanner is unavailable" and nothing is ingested; a task is blocked with rule `scanner-unavailable`.
 - Layout: the home, project, models, security, and evaluations pages have no horizontal overflow at 390 px.
 - Debt review: no TODO/FIXME, `console.log`, or explicit `any`; unused exports were removed; evals and e2e code are now type-checked; Promptfoo variables are schema-validated; `npm audit` reports 0 vulnerabilities.
+
+## D hosted CI evidence (GitHub Actions)
+
+- First pushed run failed at `npm ci`: [run 41429648918](https://github.com/Rizsaurav/agentgate-studio/actions/runs/41429648918). Promptfoo depends on `@opentelemetry/api ^1.9.0` (resolved to 1.10.0) while its SDK packages require `<1.10.0`, and a required `@types/json-schema` peer was missing from the macOS-generated lockfile. Fixed with an `overrides` pin and an explicit dev dependency. A second run failed starting the scanner because only `llm-guard` and `transformers` were pinned; the scanner runtime stack is now pinned. Neither problem was visible locally.
+- Passing run on `main`: [run 41431132631](https://github.com/Rizsaurav/agentgate-studio/actions/runs/41431132631). Both required jobs succeeded: `verify` (`npm run check`) and `security-evals` (7 test files including the live LLM Guard scanner tests, required suite 12/12, weak configuration failed 7 security cases as required, results artifact uploaded). No paid API key is involved.
+- Intentional regression: the secret check in `ProtectionPipeline.inspectOutput` was disabled on a temporary branch. CI failed on both jobs: [run 41431573320](https://github.com/Rizsaurav/agentgate-studio/actions/runs/41431573320). Reverting it returned CI to green: [run 41432032997](https://github.com/Rizsaurav/agentgate-studio/actions/runs/41432032997). The branch was then deleted; the runs remain.
+- The Evaluations page lists these runs through `gh` and links the run whose commit matches a stored local evaluation.

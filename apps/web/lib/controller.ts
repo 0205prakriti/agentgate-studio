@@ -80,7 +80,9 @@ function controller(): Controller {
       (document, chunks) => guard.screenDocument(document, chunks),
     );
     // The evaluation suite is version-controlled in the repository, not in the data directory.
+    // Resolved at runtime on purpose, so the bundler must not trace the whole repository.
     const repoRoot = resolve(
+      /* turbopackIgnore: true */
       process.env.AGENTGATE_REPO_ROOT ?? join(process.cwd(), '..', '..'),
     );
     const evals = new EvalService(new SqliteEvals(db), repoRoot);

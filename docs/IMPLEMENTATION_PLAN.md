@@ -50,19 +50,9 @@ Browser end-to-end and mobile checks, restart recovery, invalid credentials, dis
 
 ## Status
 
-A1–A3, B, and C are complete. D is implemented and verified locally; its exit criterion (an actual GitHub run) is pending because no repository is connected. E is planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+A1–A3, B, C, and E's local checks are complete. D is implemented and verified locally; its exit criterion (an actual GitHub Actions run) and the demo step that shows a failing CI check are pending because no repository is connected. Known limitations are listed in the [README](../README.md#known-limitations).
 
-D limitations: the required suite uses a scripted model fixture, so it proves the application stops unsafe content whatever a model says, not that any real model behaves safely; live-model evaluations were not added. LLM Guard is conservative and also flags credential-seeking questions such as "What is the admin key?" as injection (observed, score 1.0), so expect false positives. Browser E2E needs Ollama and is run locally, not in CI.
-
-C limitations: model text is held until the answer has been inspected, so answers appear after generation completes rather than token by token. Prompt-injection detection is LLM Guard's `PromptInjection` scanner (threshold 0.9, chunked); it can miss attacks and flag benign text. Deterministic rules cover a small set of credential formats, destructive operations, and data-carrying links. The scanner is a separate local service that must be started (`npm run scanner`).
-
-B limitations: the reference folder (`AGENTGATE_DOCS_ROOT`) is the only place documents are read from, and only `.md`/`.txt` files up to 200 KB; the tiny local models used for verification (0.4–0.5B parameters) often answer poorly even with correct context, so answer quality is not asserted by automated tests. Deterministic secret rules cover well-known credential formats only.
-
-A3 limitation: no valid paid cloud key was available, so a successful cloud connection and cloud run were not exercised; invalid-key rejection was verified live against Anthropic and OpenAI. Cloud providers are limited to Anthropic and OpenAI. Pi also honours provider environment variables such as `ANTHROPIC_API_KEY`; the Models page labels that source.
-
-A2 limitations: one model provider (Ollama); a cancel issued while a model is still being opened is ignored; the Ollama OpenAI-compatible endpoint uses Ollama's default context length.
-
-No Git remote was supplied. Local commits are possible; hosted GitHub Actions evidence requires a configured repository and pushed workflow.
+No Git remote was supplied. Hosted GitHub Actions evidence requires a configured repository and a pushed workflow.
 
 ## A1 verification evidence
 
@@ -108,3 +98,11 @@ No Git remote was supplied. Local commits are possible; hosted GitHub Actions ev
 - The dashboard (`/evaluations`) runs the suite through a bounded worker (one at a time, 10-minute limit, minimal child environment, no secrets inherited), persists the configuration hash (all evaluated files plus pins), commit, and per-case results in SQLite, and lists GitHub Actions runs through `gh`, linking the run whose commit matches. Chrome E2E ran both profiles from the dashboard.
 - `.github/workflows/verify.yml` (actionlint clean) defines two required jobs: `verify` (`npm run check`) and `security-evals` (CPU LLM Guard, live scanner tests, the required suite, and a step that fails the job if the weak configuration passes). No paid key is used. Results are uploaded as an artifact.
 - `npm audit`: promptfoo's transitive `minimatch`, `glob`, and `basic-ftp` are overridden to patched versions; 0 known vulnerabilities.
+
+## E verification evidence
+
+- Chrome E2E (`npm run test:e2e`, real Ollama, real scanner): create a project and run a real model session; shared context and retrieved sources across two models; quarantine of the poisoned document and a blocked injection with inspectable reasons; running the required and the deliberately weak suites from the dashboard; invalid cloud key rejected without echo; disconnected Ollama shows how to start it.
+- Restart recovery: a server killed with SIGKILL and started again on the same data directory shows the same project, session, and conversation. A task running at the time of a crash is marked failed ("Interrupted by an application restart") and queued work resumes (unit tests).
+- Scanner outage in the browser: referencing documents is refused with "security scanner is unavailable" and nothing is ingested; a task is blocked with rule `scanner-unavailable`.
+- Layout: the home, project, models, security, and evaluations pages have no horizontal overflow at 390 px.
+- Debt review: no TODO/FIXME, `console.log`, or explicit `any`; unused exports were removed; evals and e2e code are now type-checked; Promptfoo variables are schema-validated; `npm audit` reports 0 vulnerabilities.

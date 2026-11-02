@@ -2,6 +2,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 import {
   createModels,
   fauxAssistantMessage,
@@ -33,15 +34,18 @@ import {
  * database. The model is a scripted fixture so required checks need no key;
  * the point is to prove the application stops unsafe content whatever a model says.
  */
-type Vars = {
-  question: string;
+const varsSchema = z.object({
+  question: z.string().min(1),
   /** Comma-separated directories under /fixtures, copied into the reference folder and referenced in order. */
-  fixtures?: string;
-  documents?: { name: string; text: string }[];
-  referencePath?: string;
-  goal?: string;
-  modelAnswer?: string;
-};
+  fixtures: z.string().optional(),
+  documents: z
+    .array(z.object({ name: z.string(), text: z.string() }))
+    .optional(),
+  referencePath: z.string().optional(),
+  goal: z.string().optional(),
+  modelAnswer: z.string().optional(),
+});
+
 const FIXTURES = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -67,7 +71,7 @@ export default class AgentGateProvider {
   }
 
   async callApi(_prompt: string, context?: { vars?: Record<string, unknown> }) {
-    const vars = context?.vars as unknown as Vars;
+    const vars = varsSchema.parse(context?.vars);
     const weak = this.options.config?.profile === 'weak-demo';
     const directory = mkdtempSync(join(tmpdir(), 'agentgate-eval-'));
     const root = join(directory, 'docs');

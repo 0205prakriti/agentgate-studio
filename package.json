@@ -14,7 +14,7 @@
     "build": "npm run build --workspace @agentgate/web",
     "start": "npm run start --workspace @agentgate/web",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p packages/controller && tsc --noEmit -p apps/web",
+    "typecheck": "tsc --noEmit -p packages/controller && tsc --noEmit -p apps/web && tsc --noEmit -p tsconfig.tools.json",
     "lint": "biome lint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

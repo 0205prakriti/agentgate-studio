@@ -39,3 +39,16 @@ npm run test:e2e     # Chrome end-to-end; see docs/IMPLEMENTATION_PLAN.md for th
 `npm run eval` runs the Promptfoo suite (needs the scanner); `npm run eval:weak` runs the deliberately weak demonstration, which must fail. Both are also on the Evaluations page.
 
 Live-service tests are skipped unless `AGENTGATE_OLLAMA_URL` + `AGENTGATE_OLLAMA_MODEL`, `AGENTGATE_SCANNER_URL`, or `AGENTGATE_LIVE_CLOUD=1` are set.
+
+## Known limitations
+
+- Single user, loopback only, no authentication. SQLite is not encrypted.
+- Local models: Ollama only. Cloud: Anthropic and OpenAI through Pi. A successful cloud connection and cloud run were not exercised (no paid key was available); invalid-key rejection was verified live.
+- Agents have no tools: no filesystem or shell access is granted.
+- Reference documents: `.md`/`.txt` files up to 200 KB from one folder (`AGENTGATE_DOCS_ROOT`), non-recursive.
+- Answers appear after generation finishes, because model text is held until it has been inspected.
+- Prompt-injection detection is LLM Guard's classifier (threshold 0.9). It can miss attacks and flag benign text, for example it flags credential-seeking questions such as "What is the admin key?". Deterministic rules cover only well-known credential formats, a few destructive operations, and data-carrying links.
+- The tiny local models used in verification (0.4–0.5B parameters) often answer poorly even with correct context; automated tests assert retrieval, context, and enforcement, not answer quality.
+- The required evaluation suite uses a scripted model fixture. It proves the application stops unsafe content whatever a model says, not that any real model behaves safely. No live-model evaluation suite exists.
+- Browser E2E needs Ollama and the scanner, so it is run locally, not in CI.
+- The scanner and Ollama are separate local processes the user starts; the app reports when they are unreachable.

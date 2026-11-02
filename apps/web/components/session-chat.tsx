@@ -1,18 +1,24 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { cancelRun, sendPrompt } from '@/app/actions';
+import { cancelRun, saveOutcome, sendPrompt } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 
 type Turn = { role: 'user' | 'assistant'; text: string };
 type StreamEvent = { seq: number; type: string; text: string };
 
+type Source = { documentId: string; title: string; seq: number };
+
 export function SessionChat({
+  projectId,
+  sources,
   sessionId,
   turns,
   activeRunId,
   activePrompt,
 }: {
+  projectId: string;
+  sources: Source[][];
   sessionId: string;
   turns: Turn[];
   activeRunId: string | null;
@@ -76,6 +82,13 @@ export function SessionChat({
               {turn.role === 'user' ? 'You' : 'Model'}
             </span>
             {turn.text}
+            {turn.role === 'assistant' && (
+              <AnswerDetails
+                projectId={projectId}
+                text={turn.text}
+                sources={sources[Math.floor(index / 2)] ?? []}
+              />
+            )}
           </li>
         ))}
         {runId && pendingPrompt.current && (
@@ -131,6 +144,35 @@ export function SessionChat({
             </Button>
           )}
         </div>
+      </form>
+    </div>
+  );
+}
+
+function AnswerDetails({
+  projectId,
+  text,
+  sources,
+}: {
+  projectId: string;
+  text: string;
+  sources: Source[];
+}) {
+  const titles = [...new Set(sources.map((source) => source.title))];
+  return (
+    <div className="mt-3 space-y-2 border-t border-teal-900/20 pt-3 text-xs text-stone-700">
+      {titles.length > 0 && (
+        <p>
+          Retrieved context:{' '}
+          <span className="font-medium">{titles.join(', ')}</span>
+        </p>
+      )}
+      <form action={saveOutcome}>
+        <input type="hidden" name="projectId" value={projectId} />
+        <input type="hidden" name="text" value={text.slice(0, 500)} />
+        <button type="submit" className="text-teal-800 underline">
+          Save as verified outcome
+        </button>
       </form>
     </div>
   );

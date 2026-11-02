@@ -22,6 +22,7 @@ export default async function SessionPage({
   const active = runs.find(
     (run) => run.status === 'queued' || run.status === 'running',
   );
+  const completed = runs.filter((run) => run.status === 'completed');
   const lastFailure =
     runs.at(-1)?.status === 'failed' ? runs.at(-1) : undefined;
   return (
@@ -44,6 +45,8 @@ export default async function SessionPage({
         </p>
       )}
       <SessionChat
+        projectId={project.id}
+        sources={completed.map((run) => sessions().sources(run.id))}
         sessionId={session.id}
         turns={sessions().view(session.id)}
         activeRunId={active?.id ?? null}

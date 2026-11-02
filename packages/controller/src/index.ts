@@ -35,5 +35,21 @@ export type { ProviderStatus } from './cloud';
 export { KeychainBackend, SecretCredentialStore } from './credentials';
 export type { SecretBackend } from './credentials';
 export { ModelRouter } from './models';
+export {
+  ContextService,
+  SqliteContext,
+  addContextSchema,
+  contextKindSchema,
+} from './context';
+export type { ContextItem, ContextKind } from './context';
+export {
+  DocumentService,
+  SqliteDocuments,
+  chunkText,
+  toFtsQuery,
+} from './documents';
+export type { Document, Passage, ReferenceResult } from './documents';
+export { detectSecrets } from './policy';
+export type { RunKnowledge } from './runner';
 export { RunService } from './runner';
 export { isLocalHost, isLocalMutation } from './local-request';

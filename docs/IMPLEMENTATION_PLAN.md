@@ -50,7 +50,9 @@ Browser end-to-end and mobile checks, restart recovery, invalid credentials, dis
 
 ## Status
 
-A1, A2, and A3 are complete (milestone A exit criteria met for local models; see the A3 limitation). B, C, D, and E are planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+A1–A3 and B are complete. C, D, and E are planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+
+B limitations: the reference folder (`AGENTGATE_DOCS_ROOT`) is the only place documents are read from, and only `.md`/`.txt` files up to 200 KB; the tiny local models used for verification (0.4–0.5B parameters) often answer poorly even with correct context, so answer quality is not asserted by automated tests. Deterministic secret rules cover well-known credential formats only.
 
 A3 limitation: no valid paid cloud key was available, so a successful cloud connection and cloud run were not exercised; invalid-key rejection was verified live against Anthropic and OpenAI. Cloud providers are limited to Anthropic and OpenAI. Pi also honours provider environment variables such as `ANTHROPIC_API_KEY`; the Models page labels that source.
 
@@ -79,3 +81,9 @@ No Git remote was supplied. Local commits are possible; hosted GitHub Actions ev
 - Saved keys use a keychain-backed implementation of Pi's `CredentialStore`; nothing is written to SQLite or disk. A test round-trips a key through the real macOS keychain.
 - Adding a key sends one tiny request and saves only if the provider accepts it. Provider errors are mapped to a fixed vocabulary, so echoed key fragments never reach SQLite, the UI, or logs. The UI receives only the connected/not-connected state and source label.
 - Live (`AGENTGATE_LIVE_CLOUD=1`, no paid key needed): an invalid key is rejected by Anthropic and OpenAI with the sanitized message, and nothing is saved. The same flow passes in Chrome and the key is absent from the page.
+
+## B verification evidence
+
+- Tests: context rendering/persistence/credential rejection, FTS5 retrieval with source attribution, project scoping, restart persistence, FTS operator neutralization, path confinement (traversal, absolute, symlink file and directory), secret/oversized/empty file exclusion, and that context reaches the system prompt while excerpts reach the model call only and are not stored in history.
+- Real models (`qwen2.5:0.5b`, `smollm2:360m`): both recalled a goal stored in the shared context; `smollm2` answered from retrieved sample documents (30-day returns, 45 dollar expedited shipping), and every answer lists its retrieved sources.
+- Chrome E2E: one project, shared context and references added, two sessions on two models, each showing retrieved sources and the same context preview.

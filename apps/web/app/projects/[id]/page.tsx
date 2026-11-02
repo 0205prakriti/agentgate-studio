@@ -1,7 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { projectIdSchema } from '@agentgate/controller';
-import { cloud, ollama, projects, sessions } from '@/lib/controller';
+import {
+  cloud,
+  context,
+  documents,
+  ollama,
+  projects,
+  sessions,
+} from '@/lib/controller';
+import { removeContext, removeReference } from '@/app/actions';
+import { AddContext, AddReference } from '@/components/knowledge-forms';
 import { StartSession } from '@/components/start-session';
 import { Button } from '@/components/ui/button';
 export const dynamic = 'force-dynamic';
@@ -23,6 +32,9 @@ export default async function ProjectPage({
       error: error instanceof Error ? error.message : 'Ollama is unavailable.',
     }));
   const cloudStatus = await cloud().status();
+  const contextItems = context().list(project.id);
+  const preview = context().render(project.id);
+  const references = documents().list(project.id);
   const groups = [
     ...(installed.models?.length
       ? [
@@ -114,6 +126,105 @@ export default async function ProjectPage({
                 connect a cloud provider
               </Link>
               .
+            </p>
+          )}
+        </div>
+      </section>
+      <section
+        aria-labelledby="context-title"
+        className="mt-6 rounded-xl border border-stone-300 bg-white p-6 sm:p-8"
+      >
+        <h2 id="context-title" className="text-xl font-semibold">
+          Shared context
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-600">
+          Every model in this project receives exactly the text below with each
+          task, so you can switch models without losing it. Credentials are
+          rejected.
+        </p>
+        <pre
+          aria-label="Context shared with models"
+          className="mt-4 whitespace-pre-wrap break-words rounded-md bg-stone-100 p-4 text-sm"
+        >
+          {preview || 'Nothing is shared yet.'}
+        </pre>
+        {contextItems.length > 0 && (
+          <ul className="mt-4 space-y-2 text-sm">
+            {contextItems.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-start justify-between gap-3"
+              >
+                <span className="break-words">
+                  <span className="font-medium capitalize">{item.kind}</span>:{' '}
+                  {item.text}
+                </span>
+                <form action={removeContext}>
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <input type="hidden" name="id" value={item.id} />
+                  <button
+                    type="submit"
+                    aria-label={`Remove ${item.kind}: ${item.text}`}
+                    className="text-teal-800 underline"
+                  >
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-6">
+          <AddContext projectId={project.id} />
+        </div>
+      </section>
+      <section
+        aria-labelledby="references-title"
+        className="mt-6 rounded-xl border border-stone-300 bg-white p-6 sm:p-8"
+      >
+        <h2 id="references-title" className="text-xl font-semibold">
+          Reference documents
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-600">
+          Answers use passages retrieved from these documents and name their
+          sources. Files are read only from the configured reference folder.
+        </p>
+        {references.length > 0 && (
+          <ul className="mt-4 space-y-2 text-sm">
+            {references.map((document) => (
+              <li
+                key={document.id}
+                className="flex items-start justify-between gap-3"
+              >
+                <span className="break-words">
+                  <span className="font-medium">{document.title}</span>{' '}
+                  <span className="font-mono text-xs text-stone-600">
+                    {document.path} · {document.chunkCount} passages ·{' '}
+                    {document.status}
+                  </span>
+                </span>
+                <form action={removeReference}>
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <input type="hidden" name="id" value={document.id} />
+                  <button
+                    type="submit"
+                    aria-label={`Remove ${document.title}`}
+                    className="text-teal-800 underline"
+                  >
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-6">
+          {documents().configured ? (
+            <AddReference projectId={project.id} />
+          ) : (
+            <p className="text-sm text-stone-700">
+              Set <code>AGENTGATE_DOCS_ROOT</code> to a folder of .md or .txt
+              files and restart to add references.
             </p>
           )}
         </div>

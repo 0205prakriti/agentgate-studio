@@ -9,7 +9,14 @@ import {
   runIdSchema,
   sendPromptSchema,
 } from '@agentgate/controller';
-import { cloud, projects, runs, sessions } from '@/lib/controller';
+import {
+  cloud,
+  context,
+  documents,
+  projects,
+  runs,
+  sessions,
+} from '@/lib/controller';
 
 export type CreateProjectState = { error: string | null };
 export async function createProject(
@@ -155,4 +162,94 @@ function firstLine(message: string): string {
     // Not a validation error list: it is already plain text.
   }
   return message.slice(0, 200);
+}
+
+export type FormState = { error: string | null; notice: string | null };
+
+/** Validation and policy messages are written for people; anything else becomes a generic message. */
+function userMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.name === 'ZodError')
+    return firstLine(error.message);
+  return error instanceof Error &&
+    error.cause === undefined &&
+    error.message.length < 200
+    ? error.message
+    : fallback;
+}
+
+export async function addContext(
+  _previous: FormState,
+  form: FormData,
+): Promise<FormState> {
+  if (!(await isLocalRequest()))
+    return {
+      error: 'Requests must come from this local workspace.',
+      notice: null,
+    };
+  try {
+    context().add({
+      projectId: form.get('projectId'),
+      kind: form.get('kind'),
+      text: form.get('text'),
+    });
+  } catch (error) {
+    return {
+      error: userMessage(error, 'The context could not be saved.'),
+      notice: null,
+    };
+  }
+  revalidatePath(`/projects/${form.get('projectId')}`);
+  return { error: null, notice: 'Added to the shared context.' };
+}
+
+export async function removeContext(form: FormData): Promise<void> {
+  if (!(await isLocalRequest())) return;
+  context().remove(form.get('projectId'), form.get('id'));
+  revalidatePath(`/projects/${form.get('projectId')}`);
+}
+
+export async function addReference(
+  _previous: FormState,
+  form: FormData,
+): Promise<FormState> {
+  if (!(await isLocalRequest()))
+    return {
+      error: 'Requests must come from this local workspace.',
+      notice: null,
+    };
+  try {
+    const result = documents().reference({
+      projectId: form.get('projectId'),
+      path: form.get('path'),
+    });
+    revalidatePath(`/projects/${form.get('projectId')}`);
+    const skipped = result.skipped
+      .map((s) => `${s.path}: ${s.reason}`)
+      .join(' ');
+    return {
+      error: result.added.length === 0 && skipped ? skipped : null,
+      notice: `Added ${result.added.length} document(s).${result.added.length > 0 && skipped ? ` Skipped: ${skipped}` : ''}`,
+    };
+  } catch (error) {
+    return {
+      error: userMessage(error, 'The documents could not be added.'),
+      notice: null,
+    };
+  }
+}
+
+export async function removeReference(form: FormData): Promise<void> {
+  if (!(await isLocalRequest())) return;
+  documents().remove(form.get('projectId'), form.get('id'));
+  revalidatePath(`/projects/${form.get('projectId')}`);
+}
+
+/** Records an assistant answer the user has checked as a verified outcome in the shared context. */
+export async function saveOutcome(form: FormData): Promise<void> {
+  if (!(await isLocalRequest())) return;
+  const projectId = String(form.get('projectId'));
+  const text = String(form.get('text') ?? '').slice(0, 500);
+  // Policy rejections (for example a credential in the text) throw and surface the error page.
+  context().add({ projectId, kind: 'outcome', text });
+  revalidatePath(`/projects/${projectId}`);
 }

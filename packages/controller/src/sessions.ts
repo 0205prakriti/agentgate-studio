@@ -60,7 +60,14 @@ export type Run = z.infer<typeof runSchema>;
 export const runEventSchema = z
   .object({
     seq: z.number().int().positive(),
-    type: z.enum(['started', 'text_delta', 'completed', 'failed', 'cancelled']),
+    type: z.enum([
+      'started',
+      'sources',
+      'text_delta',
+      'completed',
+      'failed',
+      'cancelled',
+    ]),
     text: z.string(),
   })
   .strict();
@@ -160,6 +167,27 @@ export class SessionService {
         ? [{ role: message.role, text: messageText(message) }]
         : [],
     );
+  }
+
+  /** Documents retrieved for a run, recorded as the run executed. */
+  sources(
+    runId: unknown,
+  ): { documentId: string; title: string; seq: number }[] {
+    return this.eventsAfter(runId, 0)
+      .filter((event) => event.type === 'sources')
+      .flatMap((event) =>
+        z
+          .array(
+            z
+              .object({
+                documentId: z.uuid(),
+                title: z.string(),
+                seq: z.number().int(),
+              })
+              .strict(),
+          )
+          .parse(JSON.parse(event.text)),
+      );
   }
 
   listRuns(sessionId: unknown): Run[] {

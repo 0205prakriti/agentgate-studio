@@ -211,7 +211,7 @@ describe('sessions and runs', () => {
       projectId: projects.create({ name: 'P' }).id,
       model,
     });
-    const timed = new RunService(repository, models, 50);
+    const timed = new RunService(repository, models, { timeoutMs: 50 });
     const run = timed.enqueue({ sessionId: session.id, prompt: 'hang' });
     await timed.idle();
     expect(sessions.findRun(run.id)).toMatchObject({
@@ -219,7 +219,7 @@ describe('sessions and runs', () => {
       error: 'The run timed out.',
     });
 
-    const runner = new RunService(repository, models, 5000);
+    const runner = new RunService(repository, models, { timeoutMs: 5000 });
     const second = runner.enqueue({ sessionId: session.id, prompt: 'hang' });
     await new Promise((resolve) => setTimeout(resolve, 50));
     runner.cancel(second.id);

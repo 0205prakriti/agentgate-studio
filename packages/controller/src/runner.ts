@@ -1,4 +1,6 @@
 import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Passage } from './documents';
+import { groundedQuestion } from './grounding';
 import type { AgentModels } from './ollama';
 import {
   sendPromptSchema,
@@ -12,6 +14,13 @@ const SYSTEM_PROMPT =
   'You are a helpful assistant inside AGENTGATE Studio. Answer concisely.';
 const MAX_ERROR_LENGTH = 300;
 
+/** Project knowledge supplied to every run; the same for whichever model runs. */
+export interface RunKnowledge {
+  context(projectId: string): string;
+  retrieve(projectId: string, query: string): Passage[];
+}
+export type RunOptions = { timeoutMs?: number; knowledge?: RunKnowledge };
+
 type StopReason = 'cancelled' | 'timeout';
 type Active = { runId: string; stop: (reason: StopReason) => void };
 
@@ -22,12 +31,17 @@ type Active = { runId: string; stop: (reason: StopReason) => void };
 export class RunService {
   private active: Active | null = null;
   private draining: Promise<void> | null = null;
+  private readonly timeoutMs: number;
+  private readonly knowledge: RunKnowledge | undefined;
 
   constructor(
     private readonly repository: SessionRepository,
     private readonly models: AgentModels,
-    private readonly timeoutMs: number = DEFAULT_RUN_TIMEOUT_MS,
-  ) {}
+    options: RunOptions = {},
+  ) {
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
+    this.knowledge = options.knowledge;
+  }
 
   /** Recover from a previous process, then continue any queued work. */
   start(): void {
@@ -93,17 +107,37 @@ export class RunService {
       if (!session) return fail('The session no longer exists.');
       const history = this.repository.messages(session.id);
       const opened = await this.models.open(session.model);
+      const context = this.knowledge?.context(session.projectId) ?? '';
+      const passages =
+        this.knowledge?.retrieve(session.projectId, run.prompt) ?? [];
       const agent = new Agent({
         initialState: {
           model: opened.model,
-          systemPrompt: SYSTEM_PROMPT,
+          systemPrompt: context
+            ? `${SYSTEM_PROMPT}\n\n${context}`
+            : SYSTEM_PROMPT,
           tools: [],
           messages: history as AgentMessage[],
         },
         streamFn: opened.streamFn,
         getApiKey: opened.getApiKey,
+        // Excerpts reach the model for this call only; they are not saved into the history.
+        transformContext: async (messages) =>
+          passages.length === 0 ? messages : withExcerpts(messages, passages),
       });
       this.repository.appendEvent(run.id, 'started', session.model.modelId);
+      if (passages.length > 0)
+        this.repository.appendEvent(
+          run.id,
+          'sources',
+          JSON.stringify(
+            passages.map(({ documentId, title, seq }) => ({
+              documentId,
+              title,
+              seq,
+            })),
+          ),
+        );
       const unsubscribe = agent.subscribe((event) => {
         if (
           event.type === 'message_update' &&
@@ -168,4 +202,29 @@ export class RunService {
       );
     }
   }
+}
+
+function withExcerpts(
+  messages: AgentMessage[],
+  passages: Passage[],
+): AgentMessage[] {
+  const index = messages.findLastIndex((message) => message.role === 'user');
+  const original = messages[index];
+  if (original?.role !== 'user') return messages;
+  const question =
+    typeof original.content === 'string'
+      ? original.content
+      : original.content
+          .map((block) => (block.type === 'text' ? block.text : ''))
+          .join('');
+  return messages.map((message, i) =>
+    i === index
+      ? {
+          ...original,
+          content: [
+            { type: 'text', text: groundedQuestion(question, passages) },
+          ],
+        }
+      : message,
+  );
 }

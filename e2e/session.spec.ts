@@ -13,7 +13,9 @@ test('project → real model session → streamed answer persists', async ({
     page.getByRole('heading', { name: 'E2E project' }),
   ).toBeVisible();
 
-  await page.getByLabel('Model').selectOption(`ollama/${model}`);
+  await page
+    .getByLabel('Model', { exact: true })
+    .selectOption(`ollama/${model}`);
   await page.getByRole('button', { name: 'Start session' }).click();
   await expect(
     page.getByRole('heading', { name: 'Agent session' }),
@@ -72,4 +74,50 @@ test('an invalid cloud API key is rejected with a sanitized message and not save
   await expect(page.getByText(bogus)).toHaveCount(0);
   await page.reload();
   await expect(page.getByText('Not connected', { exact: true })).toHaveCount(2);
+});
+
+const secondModel = process.env.AGENTGATE_E2E_MODEL_2;
+test('shared context and retrieved sources follow the project across two models', async ({
+  page,
+}) => {
+  test.skip(
+    !model || !secondModel,
+    'Set AGENTGATE_E2E_MODEL and AGENTGATE_E2E_MODEL_2.',
+  );
+  await page.goto('/');
+  await page.getByLabel('Project name').fill('Reference RAG');
+  await page.getByRole('button', { name: /Create project/ }).click();
+
+  await page.getByLabel('Add to shared context').selectOption('goal');
+  await page
+    .getByLabel('Context text')
+    .fill('Answer Northwind Bikes support questions');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  const preview = page.getByLabel('Context shared with models');
+  await expect(preview).toContainText(
+    'Answer Northwind Bikes support questions',
+  );
+  await page.getByRole('button', { name: 'Add reference' }).click();
+  await expect(page.getByText('Returns Policy')).toBeVisible();
+
+  for (const id of [model, secondModel] as string[]) {
+    await page
+      .getByLabel('Model', { exact: true })
+      .selectOption(`ollama/${id}`);
+    await page.getByRole('button', { name: 'Start session' }).click();
+    await page
+      .getByLabel('Task')
+      .fill('How many days do I have to return a bicycle?');
+    await page.getByRole('button', { name: 'Run task' }).click();
+    await expect(page.getByText('Retrieved context:')).toContainText(
+      'Returns Policy',
+      {
+        timeout: 90_000,
+      },
+    );
+    await page.getByRole('link', { name: /^←/ }).click();
+    await expect(preview).toContainText(
+      'Answer Northwind Bikes support questions',
+    );
+  }
 });

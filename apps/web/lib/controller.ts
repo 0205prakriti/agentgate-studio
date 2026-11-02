@@ -3,6 +3,10 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   CloudCatalog,
+  ContextService,
+  DocumentService,
+  SqliteContext,
+  SqliteDocuments,
   KeychainBackend,
   ModelRouter,
   OllamaCatalog,
@@ -22,6 +26,8 @@ type Controller = {
   runs: RunService;
   ollama: OllamaCatalog;
   cloud: CloudCatalog;
+  context: ContextService;
+  documents: DocumentService;
 };
 const globalController = globalThis as typeof globalThis & {
   controller?: Controller;
@@ -43,17 +49,37 @@ function controller(): Controller {
     const cloud = new CloudCatalog(
       new SecretCredentialStore(new KeychainBackend(), CLOUD_PROVIDERS),
     );
+    const projectService = new ProjectService(projectRepository);
+    const context = new ContextService(
+      new SqliteContext(db),
+      projectRepository,
+    );
+    // Reference documents are read only from this folder.
+    const docsRoot = process.env.AGENTGATE_DOCS_ROOT;
+    const documents = new DocumentService(
+      new SqliteDocuments(db),
+      projectRepository,
+      docsRoot ? resolve(docsRoot) : null,
+    );
     const runs = new RunService(
       sessionRepository,
       new ModelRouter(ollama, cloud),
+      {
+        knowledge: {
+          context: (projectId) => context.render(projectId),
+          retrieve: (projectId, query) => documents.retrieve(projectId, query),
+        },
+      },
     );
     runs.start();
     globalController.controller = {
-      projects: new ProjectService(projectRepository),
+      projects: projectService,
       sessions: new SessionService(sessionRepository, projectRepository),
       runs,
       ollama,
       cloud,
+      context,
+      documents,
     };
   }
   return globalController.controller;
@@ -63,3 +89,5 @@ export const sessions = () => controller().sessions;
 export const runs = () => controller().runs;
 export const ollama = () => controller().ollama;
 export const cloud = () => controller().cloud;
+export const context = () => controller().context;
+export const documents = () => controller().documents;

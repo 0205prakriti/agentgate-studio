@@ -1,2 +1,9 @@
+# Versions verified together. LLM Guard's own ranges are loose, and an unpinned numpy or
+# transformers broke the scanner on a fresh install, so the runtime stack is pinned here.
 llm-guard==0.3.15
 transformers==4.57.6
+numpy==2.4.6
+torch==2.15.0
+tokenizers==0.22.2
+huggingface-hub==0.36.2
+safetensors==0.8.0

@@ -43,6 +43,7 @@
   "overrides": {
     "minimatch": "11.0.4",
     "glob": "14.0.3",
-    "basic-ftp": "6.2.5"
+    "basic-ftp": "6.2.5",
+    "@opentelemetry/api": "1.9.1"
   }
 }

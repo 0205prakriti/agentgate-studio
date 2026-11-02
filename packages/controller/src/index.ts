@@ -72,3 +72,11 @@ export type {
 export type { RunKnowledge } from './runner';
 export { RunService } from './runner';
 export { isLocalHost, isLocalMutation } from './local-request';
+export {
+  EvalService,
+  SqliteEvals,
+  configurationIdentity,
+  evalProfileSchema,
+  listGithubRuns,
+} from './evals';
+export type { EvalProfile, EvalResult, EvalRun, GithubRun } from './evals';

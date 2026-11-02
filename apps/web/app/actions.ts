@@ -13,6 +13,7 @@ import {
   cloud,
   context,
   documents,
+  evals,
   projects,
   runs,
   sessions,
@@ -255,4 +256,10 @@ export async function saveOutcome(form: FormData): Promise<void> {
   // Policy rejections (for example a credential in the text) throw and surface the error page.
   context().add({ projectId, kind: 'outcome', text });
   revalidatePath(`/projects/${projectId}`);
+}
+
+export async function startEvaluation(form: FormData): Promise<void> {
+  if (!(await isLocalRequest())) return;
+  await evals().enqueue(form.get('profile'));
+  revalidatePath('/evaluations');
 }

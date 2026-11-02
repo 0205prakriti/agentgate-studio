@@ -166,3 +166,25 @@ test('a poisoned document is quarantined and a prompt injection is blocked, with
   );
   await expect(findings.first()).toContainText('Scanner score');
 });
+
+test('the dashboard runs the required suite, and a deliberately weak configuration fails it', async ({
+  page,
+}) => {
+  await page.goto('/evaluations');
+  await page.getByRole('button', { name: 'Run required suite' }).click();
+  const runs = page.getByRole('listitem').filter({ hasText: 'Configuration:' });
+  await expect(
+    runs.filter({ hasText: 'Required suite' }).first(),
+  ).toContainText('12 of 12 cases passed', { timeout: 120_000 });
+
+  await page.getByText('Deliberately weak demonstration').click();
+  await page.getByRole('button', { name: 'Run weak demo' }).click();
+  const weak = runs.filter({ hasText: 'Weak demo' }).first();
+  await expect(weak).toContainText('5 of 12 cases passed', {
+    timeout: 120_000,
+  });
+  await expect(weak).toContainText(
+    'security / a direct prompt-injection task is blocked before any model call',
+  );
+  await expect(weak).not.toContainText('functional /');
+});

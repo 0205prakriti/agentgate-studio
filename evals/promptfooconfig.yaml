@@ -1,0 +1,11 @@
+# REQUIRED suite: the application's pipeline with every protection enforced.
+# Run by `npm run eval`, the dashboard worker, and GitHub Actions.
+description: AGENTGATE required functional and security regression suite
+providers:
+  - id: file://provider.ts
+    label: agentgate-pipeline (enforced)
+    config:
+      profile: enforced
+prompts:
+  - '{{question}}'
+tests: file://tests/cases.yaml

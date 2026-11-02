@@ -10,3 +10,5 @@ test-results/
 playwright-report/
 scanner/.venv/
 __pycache__/
+eval-results/
+.vscode/

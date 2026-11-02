@@ -50,7 +50,9 @@ Browser end-to-end and mobile checks, restart recovery, invalid credentials, dis
 
 ## Status
 
-A1–A3, B, and C are complete. D and E are planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+A1–A3, B, and C are complete. D is implemented and verified locally; its exit criterion (an actual GitHub run) is pending because no repository is connected. E is planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+
+D limitations: the required suite uses a scripted model fixture, so it proves the application stops unsafe content whatever a model says, not that any real model behaves safely; live-model evaluations were not added. LLM Guard is conservative and also flags credential-seeking questions such as "What is the admin key?" as injection (observed, score 1.0), so expect false positives. Browser E2E needs Ollama and is run locally, not in CI.
 
 C limitations: model text is held until the answer has been inspected, so answers appear after generation completes rather than token by token. Prompt-injection detection is LLM Guard's `PromptInjection` scanner (threshold 0.9, chunked); it can miss attacks and flag benign text. Deterministic rules cover a small set of credential formats, destructive operations, and data-carrying links. The scanner is a separate local service that must be started (`npm run scanner`).
 
@@ -97,3 +99,12 @@ No Git remote was supplied. Local commits are possible; hosted GitHub Actions ev
 - Tests: deterministic rules; blocked tasks never reach the model; answers with secrets or exfiltration links are withheld and not persisted; scanner unreachable/timeout/HTTP error/malformed/wrong-shape/wrong-count all fail closed for input, retrieval, and ingestion (real local HTTP servers); ingestion and retrieval-time quarantine.
 - Live (`AGENTGATE_SCANNER_URL`): with the real LLM Guard model, the three benign sample documents are ingested, `fixtures/attack/poisoned-faq.md` is quarantined, a normal question completes, and a real injection prompt is blocked.
 - Chrome E2E against the real scanner and Ollama: quarantine of the poisoned document and a blocked injection prompt are visible with rule, source, and score on the Security page.
+
+## D verification evidence
+
+- `evals/` holds the version-controlled Promptfoo suite: 12 cases (3 functional, 9 security) that run the real ingestion, retrieval, LLM Guard scan, generation, and output-inspection path. `evals/weak.promptfooconfig.yaml` is the only place the protections are switched off, is labelled as deliberately weak, and is never a default.
+- Local results: `npm run eval` passes 12/12 (exit 0). `npm run eval:weak` fails the 7 security cases it should, while all 3 functional cases still pass (exit 100).
+- Real regression: disabling the secret check in `ProtectionPipeline.inspectOutput` made the required case "a compromised model that emits a credential is stopped before delivery" fail (11/12); restoring the code returned 12/12.
+- The dashboard (`/evaluations`) runs the suite through a bounded worker (one at a time, 10-minute limit, minimal child environment, no secrets inherited), persists the configuration hash (all evaluated files plus pins), commit, and per-case results in SQLite, and lists GitHub Actions runs through `gh`, linking the run whose commit matches. Chrome E2E ran both profiles from the dashboard.
+- `.github/workflows/verify.yml` (actionlint clean) defines two required jobs: `verify` (`npm run check`) and `security-evals` (CPU LLM Guard, live scanner tests, the required suite, and a step that fails the job if the weak configuration passes). No paid key is used. Results are uploaded as an artifact.
+- `npm audit`: promptfoo's transitive `minimatch`, `glob`, and `basic-ftp` are overridden to patched versions; 0 known vulnerabilities.

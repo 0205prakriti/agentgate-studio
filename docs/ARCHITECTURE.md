@@ -9,7 +9,9 @@ flowchart LR
   Pi --> Models[Ollama / cloud provider planned]
   Runner --> Security[Protection pipeline]
   Security --> Scanner[LLM Guard scanner service]
-  Runner -. planned .-> Eval[Promptfoo]
+  Controller --> EvalWorker[Bounded eval worker]
+  EvalWorker --> Eval[Promptfoo suite]
+  Eval --> Security
 ```
 
 Implemented in A1: `apps/web` owns UI and server-action transport; `packages/controller/src/projects.ts` owns project rules and typed contracts; `sqlite-projects.ts` owns persistence and schema migration. The controller validates request and repository outputs. SQLite is the canonical owner of project metadata. The Node server uses one controller instance per process, retained through development reloads.
@@ -25,3 +27,5 @@ Implemented in A2: `RunService` drains a durable SQLite queue one run at a time,
 Implemented in B: one structured context record per project (goals, approved decisions, verified outcomes) is rendered into every run's system prompt, so switching models keeps it. `DocumentService` ingests `.md`/`.txt` files confined to one reference folder into SQLite FTS5; retrieval is project-scoped, bm25-ranked, and quarantined documents are excluded. Retrieved excerpts are labelled untrusted and added to the model call only, never stored in history. Deterministic secret rules keep credentials out of context and documents.
 
 Implemented in C: `ProtectionPipeline` combines application-owned deterministic rules with the LLM Guard prompt-injection scanner, which runs as a separate loopback Python service (`scanner/`) returning scores only. The run loop calls it at input, on retrieved passages, and on the complete answer before any text is emitted; documents are scanned at ingestion and quarantined. Scanner failures are mapped to a blocked outcome. Decisions are persisted as security events.
+
+Implemented in D: `EvalService` runs the repository's Promptfoo suite as a bounded child process and persists configuration identity and per-case results. The suite's provider drives the same `RunService`, `DocumentService`, and `ProtectionPipeline` the app uses, with a scripted model fixture. GitHub Actions runs the identical `npm run eval`.

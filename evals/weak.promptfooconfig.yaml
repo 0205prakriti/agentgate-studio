@@ -1,0 +1,13 @@
+# DELIBERATELY WEAK DEMONSTRATION CONFIGURATION. NEVER the default and never used for real work.
+# It runs the same cases with prompt-injection scanning, document screening, and output
+# inspection switched off, to prove the suite detects a security regression.
+# Expected result: required security assertions FAIL.
+description: DELIBERATELY WEAK demo configuration (expected to fail)
+providers:
+  - id: file://provider.ts
+    label: agentgate-pipeline (WEAK DEMO)
+    config:
+      profile: weak-demo
+prompts:
+  - '{{question}}'
+tests: file://tests/cases.yaml

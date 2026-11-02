@@ -93,8 +93,38 @@ CREATE TABLE security_events (
 ) STRICT;
 CREATE INDEX security_events_by_time ON security_events(created_at DESC);`;
 
+const EVALUATIONS = `
+CREATE TABLE eval_runs (
+  id TEXT PRIMARY KEY NOT NULL,
+  profile TEXT NOT NULL CHECK(profile IN ('enforced','weak-demo')),
+  status TEXT NOT NULL CHECK(status IN ('queued','running','passed','failed','error')),
+  config_hash TEXT NOT NULL,
+  git_sha TEXT,
+  git_dirty INTEGER NOT NULL CHECK(git_dirty IN (0,1)),
+  total INTEGER NOT NULL DEFAULT 0,
+  passed INTEGER NOT NULL DEFAULT 0,
+  failed INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  finished_at TEXT
+) STRICT;
+CREATE TABLE eval_results (
+  run_id TEXT NOT NULL REFERENCES eval_runs(id),
+  idx INTEGER NOT NULL,
+  description TEXT NOT NULL,
+  passed INTEGER NOT NULL CHECK(passed IN (0,1)),
+  reason TEXT,
+  PRIMARY KEY (run_id, idx)
+) STRICT;`;
+
 /** Ordered migrations; PRAGMA user_version is the number applied. Never edit an applied entry. */
-const MIGRATIONS = [PROJECTS, SESSIONS, CONTEXT_AND_DOCUMENTS, SECURITY];
+const MIGRATIONS = [
+  PROJECTS,
+  SESSIONS,
+  CONTEXT_AND_DOCUMENTS,
+  SECURITY,
+  EVALUATIONS,
+];
 
 /** Single owner of the application database file, schema, and migrations. */
 export function openDatabase(filename: string): Database.Database {

@@ -24,6 +24,9 @@ export default function RootLayout({
               <Link href="/security" className="hover:underline">
                 Security
               </Link>
+              <Link href="/evaluations" className="hover:underline">
+                Evaluations
+              </Link>
               <span className="rounded-full border border-stone-300 px-3 py-1 text-xs font-medium">
                 Local workspace
               </span>

@@ -193,7 +193,7 @@ export class SqliteSessions implements SessionRepository {
 
   finishRun(
     runId: string,
-    status: 'failed' | 'cancelled',
+    status: 'failed' | 'cancelled' | 'blocked',
     error: string | null,
   ): void {
     this.finish(runId, status, error);
@@ -201,7 +201,7 @@ export class SqliteSessions implements SessionRepository {
 
   private finish(
     runId: string,
-    status: 'completed' | 'failed' | 'cancelled',
+    status: 'completed' | 'failed' | 'cancelled' | 'blocked',
     error: string | null,
   ): void {
     this.db

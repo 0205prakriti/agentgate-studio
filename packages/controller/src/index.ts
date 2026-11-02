@@ -49,7 +49,26 @@ export {
   toFtsQuery,
 } from './documents';
 export type { Document, Passage, ReferenceResult } from './documents';
-export { detectSecrets } from './policy';
+export {
+  detectDisallowedOperation,
+  detectExfiltrationLink,
+  detectSecrets,
+  safeExcerpt,
+} from './policy';
+export {
+  DEFAULT_SCANNER_URL,
+  LlmGuardScanner,
+  ScannerUnavailableError,
+} from './scanner';
+export type { InjectionScanner, ScanVerdict } from './scanner';
+export { ProtectionPipeline, SqliteSecurityEvents } from './security';
+export type {
+  Blocked,
+  Decision,
+  RunGuard,
+  SecurityEvent,
+  SecurityEventRepository,
+} from './security';
 export type { RunKnowledge } from './runner';
 export { RunService } from './runner';
 export { isLocalHost, isLocalMutation } from './local-request';

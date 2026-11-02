@@ -42,6 +42,7 @@ export const runStatusSchema = z.enum([
   'completed',
   'failed',
   'cancelled',
+  'blocked',
 ]);
 export type RunStatus = z.infer<typeof runStatusSchema>;
 export const runSchema = z
@@ -67,6 +68,7 @@ export const runEventSchema = z
       'completed',
       'failed',
       'cancelled',
+      'blocked',
     ]),
     text: z.string(),
   })
@@ -76,6 +78,7 @@ export const TERMINAL_STATUSES: readonly RunStatus[] = [
   'completed',
   'failed',
   'cancelled',
+  'blocked',
 ];
 
 /**
@@ -123,7 +126,7 @@ export interface SessionRepository {
   completeRun(run: Run, messages: StoredMessage[]): void;
   finishRun(
     runId: string,
-    status: 'failed' | 'cancelled',
+    status: 'failed' | 'cancelled' | 'blocked',
     error: string | null,
   ): void;
   /** Marks runs left running by a previous process as failed. */

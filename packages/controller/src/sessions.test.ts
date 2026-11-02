@@ -18,6 +18,7 @@ import {
   openDatabase,
   type AgentModels,
 } from './index';
+import { markerScanner, protection } from './test-support';
 
 const directories: string[] = [];
 const closers: (() => void)[] = [];
@@ -36,6 +37,7 @@ function open(filename: string) {
   const repository = new SqliteSessions(db);
   return {
     db,
+    guard: protection(db, markerScanner()).guard,
     repository,
     projects: new ProjectService(projectRepository),
     sessions: new SessionService(repository, projectRepository),
@@ -82,12 +84,12 @@ describe('sessions and runs', () => {
   });
 
   it('streams events, persists the transcript, and reopens it after restart', async () => {
-    const { filename, db, projects, sessions, repository } = setup();
+    const { filename, db, projects, sessions, repository, guard } = setup();
     const { faux, models } = fauxModels();
     faux.setResponses([fauxAssistantMessage('Hello from the model.')]);
     const project = projects.create({ name: 'P' });
     const session = sessions.createSession({ projectId: project.id, model });
-    const runner = new RunService(repository, models);
+    const runner = new RunService(repository, models, { guard: guard });
     const run = runner.enqueue({ sessionId: session.id, prompt: ' Hi ' });
     expect(run.prompt).toBe('Hi');
     await runner.idle();
@@ -115,7 +117,7 @@ describe('sessions and runs', () => {
   });
 
   it('replays stored history into the next turn', async () => {
-    const { projects, sessions, repository } = setup();
+    const { projects, sessions, repository, guard } = setup();
     const { faux, models } = fauxModels();
     let seenRoles: string[] = [];
     faux.setResponses([
@@ -129,7 +131,7 @@ describe('sessions and runs', () => {
       projectId: projects.create({ name: 'P' }).id,
       model,
     });
-    const runner = new RunService(repository, models);
+    const runner = new RunService(repository, models, { guard: guard });
     runner.enqueue({ sessionId: session.id, prompt: 'one' });
     await runner.idle();
     runner.enqueue({ sessionId: session.id, prompt: 'two' });
@@ -139,13 +141,13 @@ describe('sessions and runs', () => {
   });
 
   it('allows one active run per session and rejects empty prompts', () => {
-    const { projects, sessions, repository } = setup();
+    const { projects, sessions, repository, guard } = setup();
     const { models } = fauxModels();
     const session = sessions.createSession({
       projectId: projects.create({ name: 'P' }).id,
       model,
     });
-    const runner = new RunService(repository, models);
+    const runner = new RunService(repository, models, { guard: guard });
     expect(() =>
       runner.enqueue({ sessionId: session.id, prompt: '   ' }),
     ).toThrow();
@@ -159,7 +161,7 @@ describe('sessions and runs', () => {
   });
 
   it('records model failures without adding them to the transcript', async () => {
-    const { projects, sessions, repository } = setup();
+    const { projects, sessions, repository, guard } = setup();
     const { faux, models } = fauxModels();
     faux.setResponses([
       fauxAssistantMessage('', {
@@ -171,7 +173,7 @@ describe('sessions and runs', () => {
       projectId: projects.create({ name: 'P' }).id,
       model,
     });
-    const runner = new RunService(repository, models);
+    const runner = new RunService(repository, models, { guard: guard });
     const run = runner.enqueue({ sessionId: session.id, prompt: 'hi' });
     await runner.idle();
     expect(sessions.findRun(run.id)).toMatchObject({
@@ -183,7 +185,7 @@ describe('sessions and runs', () => {
   });
 
   it('fails the run when the model cannot be opened', async () => {
-    const { projects, sessions, repository } = setup();
+    const { projects, sessions, repository, guard } = setup();
     const models: AgentModels = {
       open: async () => {
         throw new Error('Ollama is not reachable.');
@@ -193,7 +195,7 @@ describe('sessions and runs', () => {
       projectId: projects.create({ name: 'P' }).id,
       model,
     });
-    const runner = new RunService(repository, models);
+    const runner = new RunService(repository, models, { guard: guard });
     const run = runner.enqueue({ sessionId: session.id, prompt: 'hi' });
     await runner.idle();
     expect(sessions.findRun(run.id)).toMatchObject({
@@ -203,7 +205,7 @@ describe('sessions and runs', () => {
   });
 
   it('times out a stalled run and cancels queued or running work', async () => {
-    const { projects, sessions, repository } = setup();
+    const { projects, sessions, repository, guard } = setup();
     const { faux, models } = fauxModels();
     const never = () => new Promise<never>(() => undefined);
     faux.setResponses([never, never]);
@@ -211,7 +213,10 @@ describe('sessions and runs', () => {
       projectId: projects.create({ name: 'P' }).id,
       model,
     });
-    const timed = new RunService(repository, models, { timeoutMs: 50 });
+    const timed = new RunService(repository, models, {
+      guard: guard,
+      timeoutMs: 50,
+    });
     const run = timed.enqueue({ sessionId: session.id, prompt: 'hang' });
     await timed.idle();
     expect(sessions.findRun(run.id)).toMatchObject({
@@ -219,7 +224,10 @@ describe('sessions and runs', () => {
       error: 'The run timed out.',
     });
 
-    const runner = new RunService(repository, models, { timeoutMs: 5000 });
+    const runner = new RunService(repository, models, {
+      guard: guard,
+      timeoutMs: 5000,
+    });
     const second = runner.enqueue({ sessionId: session.id, prompt: 'hang' });
     await new Promise((resolve) => setTimeout(resolve, 50));
     runner.cancel(second.id);
@@ -232,7 +240,7 @@ describe('sessions and runs', () => {
   });
 
   it('marks runs interrupted by a restart as failed and resumes queued runs', async () => {
-    const { filename, db, projects, sessions, repository } = setup();
+    const { filename, db, projects, sessions, repository, guard } = setup();
     const session = sessions.createSession({
       projectId: projects.create({ name: 'P' }).id,
       model,
@@ -244,7 +252,9 @@ describe('sessions and runs', () => {
     const reopened = open(filename);
     const { faux, models } = fauxModels();
     faux.setResponses([fauxAssistantMessage('Recovered.')]);
-    const runner = new RunService(reopened.repository, models);
+    const runner = new RunService(reopened.repository, models, {
+      guard: reopened.guard,
+    });
     runner.start();
     await runner.idle();
     expect(reopened.sessions.findRun(interrupted.id)).toMatchObject({
@@ -277,12 +287,12 @@ describe.runIf(ollamaUrl && liveModel)('live Ollama (integration)', () => {
   it('lists installed models and runs a real task through Pi', async () => {
     const catalog = new OllamaCatalog(ollamaUrl);
     expect(await catalog.listInstalled()).toContain(liveModel);
-    const { projects, sessions, repository } = setup();
+    const { projects, sessions, repository, guard } = setup();
     const session = sessions.createSession({
       projectId: projects.create({ name: 'Live' }).id,
       model: { provider: 'ollama', modelId: liveModel as string },
     });
-    const runner = new RunService(repository, catalog);
+    const runner = new RunService(repository, catalog, { guard: guard });
     const run = runner.enqueue({
       sessionId: session.id,
       prompt: 'Reply with one short sentence.',

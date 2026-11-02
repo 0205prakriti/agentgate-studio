@@ -19,7 +19,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "scanner:setup": "sh scanner/setup.sh",
+    "scanner": "scanner/.venv/bin/python scanner/server.py"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",

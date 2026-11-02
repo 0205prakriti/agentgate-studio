@@ -2,6 +2,7 @@ import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Passage } from './documents';
 import { groundedQuestion } from './grounding';
 import type { AgentModels } from './ollama';
+import type { Blocked, RunGuard } from './security';
 import {
   sendPromptSchema,
   storedMessageSchema,
@@ -19,7 +20,13 @@ export interface RunKnowledge {
   context(projectId: string): string;
   retrieve(projectId: string, query: string): Passage[];
 }
-export type RunOptions = { timeoutMs?: number; knowledge?: RunKnowledge };
+export type RunOptions = {
+  /** Required: no model text is delivered without passing the guard. */
+  guard: RunGuard;
+  timeoutMs?: number;
+  knowledge?: RunKnowledge;
+};
+const DELIVERY_CHUNK_CHARS = 40;
 
 type StopReason = 'cancelled' | 'timeout';
 type Active = { runId: string; stop: (reason: StopReason) => void };
@@ -33,12 +40,14 @@ export class RunService {
   private draining: Promise<void> | null = null;
   private readonly timeoutMs: number;
   private readonly knowledge: RunKnowledge | undefined;
+  private readonly guard: RunGuard;
 
   constructor(
     private readonly repository: SessionRepository,
     private readonly models: AgentModels,
-    options: RunOptions = {},
+    options: RunOptions,
   ) {
+    this.guard = options.guard;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
     this.knowledge = options.knowledge;
   }
@@ -98,6 +107,11 @@ export class RunService {
       this.repository.appendEvent(run.id, 'failed', message);
       this.repository.finishRun(run.id, 'failed', message);
     };
+    const blocked = (decision: Blocked) => {
+      const message = `Blocked by security rule ${decision.rule}: ${decision.reason}`;
+      this.repository.appendEvent(run.id, 'blocked', message);
+      this.repository.finishRun(run.id, 'blocked', message);
+    };
     const cancelled = () => {
       this.repository.appendEvent(run.id, 'cancelled', 'Cancelled.');
       this.repository.finishRun(run.id, 'cancelled', null);
@@ -106,10 +120,18 @@ export class RunService {
       const session = this.repository.findSession(run.sessionId);
       if (!session) return fail('The session no longer exists.');
       const history = this.repository.messages(session.id);
-      const opened = await this.models.open(session.model);
+      const guardContext = { projectId: session.projectId, runId: run.id };
+      // Input check → retrieval → scan retrieved content → generate → inspect output → deliver or block.
+      const input = await this.guard.checkInput(guardContext, run.prompt);
+      if (!input.allowed) return blocked(input);
+      const screened = await this.guard.screenPassages(
+        guardContext,
+        this.knowledge?.retrieve(session.projectId, run.prompt) ?? [],
+      );
+      if (screened.blocked) return blocked(screened.blocked);
+      const passages = screened.passages;
       const context = this.knowledge?.context(session.projectId) ?? '';
-      const passages =
-        this.knowledge?.retrieve(session.projectId, run.prompt) ?? [];
+      const opened = await this.models.open(session.model);
       const agent = new Agent({
         initialState: {
           model: opened.model,
@@ -138,16 +160,14 @@ export class RunService {
             })),
           ),
         );
+      // Model text is held back until the output has been inspected.
+      let answer = '';
       const unsubscribe = agent.subscribe((event) => {
         if (
           event.type === 'message_update' &&
           event.assistantMessageEvent.type === 'text_delta'
         ) {
-          this.repository.appendEvent(
-            run.id,
-            'text_delta',
-            event.assistantMessageEvent.delta,
-          );
+          answer += event.assistantMessageEvent.delta;
         }
       });
       // A hard stop: even a provider that ignores abort cannot hold the queue.
@@ -183,6 +203,14 @@ export class RunService {
           opened.describeError(
             last.errorMessage ?? 'The model request failed.',
           ),
+        );
+      const output = this.guard.inspectOutput(guardContext, answer);
+      if (!output.allowed) return blocked(output);
+      for (let i = 0; i < answer.length; i += DELIVERY_CHUNK_CHARS)
+        this.repository.appendEvent(
+          run.id,
+          'text_delta',
+          answer.slice(i, i + DELIVERY_CHUNK_CHARS),
         );
       this.repository.appendEvent(run.id, 'completed', '');
       this.repository.completeRun(

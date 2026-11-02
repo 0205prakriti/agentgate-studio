@@ -7,7 +7,8 @@ flowchart LR
   Controller --> Runner[Bounded run queue]
   Runner --> Pi[Pi agent runtime]
   Pi --> Models[Ollama / cloud provider planned]
-  Runner -. planned .-> Security[LLM Guard + deterministic policies]
+  Runner --> Security[Protection pipeline]
+  Security --> Scanner[LLM Guard scanner service]
   Runner -. planned .-> Eval[Promptfoo]
 ```
 
@@ -22,3 +23,5 @@ Provider, scanner, and evaluation contracts will be added with their first real 
 Implemented in A2: `RunService` drains a durable SQLite queue one run at a time, with a hard deadline, cancellation, and recovery of runs interrupted by a restart. It drives a Pi `Agent` with no tools against a model from `OllamaCatalog`, which verifies the model is actually installed. Run events are rows in SQLite; the UI reads them over a resumable SSE route, so a dropped browser connection never affects the run. SQLite owns the conversation history.
 
 Implemented in B: one structured context record per project (goals, approved decisions, verified outcomes) is rendered into every run's system prompt, so switching models keeps it. `DocumentService` ingests `.md`/`.txt` files confined to one reference folder into SQLite FTS5; retrieval is project-scoped, bm25-ranked, and quarantined documents are excluded. Retrieved excerpts are labelled untrusted and added to the model call only, never stored in history. Deterministic secret rules keep credentials out of context and documents.
+
+Implemented in C: `ProtectionPipeline` combines application-owned deterministic rules with the LLM Guard prompt-injection scanner, which runs as a separate loopback Python service (`scanner/`) returning scores only. The run loop calls it at input, on retrieved passages, and on the complete answer before any text is emitted; documents are scanned at ingestion and quarantined. Scanner failures are mapped to a blocked outcome. Decisions are persisted as security events.

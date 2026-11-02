@@ -9,7 +9,10 @@ import {
   SqliteDocuments,
   KeychainBackend,
   ModelRouter,
+  LlmGuardScanner,
   OllamaCatalog,
+  ProtectionPipeline,
+  SqliteSecurityEvents,
   ProjectService,
   RunService,
   SecretCredentialStore,
@@ -28,6 +31,7 @@ type Controller = {
   cloud: CloudCatalog;
   context: ContextService;
   documents: DocumentService;
+  security: SqliteSecurityEvents;
 };
 const globalController = globalThis as typeof globalThis & {
   controller?: Controller;
@@ -49,22 +53,33 @@ function controller(): Controller {
     const cloud = new CloudCatalog(
       new SecretCredentialStore(new KeychainBackend(), CLOUD_PROVIDERS),
     );
+    // Reference documents are read only from this folder.
+    const docsRoot = process.env.AGENTGATE_DOCS_ROOT;
     const projectService = new ProjectService(projectRepository);
     const context = new ContextService(
       new SqliteContext(db),
       projectRepository,
     );
-    // Reference documents are read only from this folder.
-    const docsRoot = process.env.AGENTGATE_DOCS_ROOT;
+    const documentRepository = new SqliteDocuments(db);
+    const security = new SqliteSecurityEvents(db);
+    // The scanner runs as a separate local service; if it is down, protected stages fail closed.
+    const guard = new ProtectionPipeline(
+      new LlmGuardScanner(process.env.AGENTGATE_SCANNER_URL),
+      security,
+      (projectId, documentId) =>
+        documentRepository.quarantine(projectId, documentId),
+    );
     const documents = new DocumentService(
-      new SqliteDocuments(db),
+      documentRepository,
       projectRepository,
       docsRoot ? resolve(docsRoot) : null,
+      (document, chunks) => guard.screenDocument(document, chunks),
     );
     const runs = new RunService(
       sessionRepository,
       new ModelRouter(ollama, cloud),
       {
+        guard,
         knowledge: {
           context: (projectId) => context.render(projectId),
           retrieve: (projectId, query) => documents.retrieve(projectId, query),
@@ -80,6 +95,7 @@ function controller(): Controller {
       cloud,
       context,
       documents,
+      security,
     };
   }
   return globalController.controller;
@@ -91,3 +107,4 @@ export const ollama = () => controller().ollama;
 export const cloud = () => controller().cloud;
 export const context = () => controller().context;
 export const documents = () => controller().documents;
+export const security = () => controller().security;

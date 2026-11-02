@@ -218,17 +218,20 @@ export async function addReference(
       notice: null,
     };
   try {
-    const result = documents().reference({
+    const result = await documents().reference({
       projectId: form.get('projectId'),
       path: form.get('path'),
     });
     revalidatePath(`/projects/${form.get('projectId')}`);
-    const skipped = result.skipped
-      .map((s) => `${s.path}: ${s.reason}`)
-      .join(' ');
+    const problems = [
+      ...result.quarantined.map(
+        (q) => `${q.document.path}: quarantined (${q.reason})`,
+      ),
+      ...result.skipped.map((s) => `${s.path}: ${s.reason}`),
+    ].join(' ');
     return {
-      error: result.added.length === 0 && skipped ? skipped : null,
-      notice: `Added ${result.added.length} document(s).${result.added.length > 0 && skipped ? ` Skipped: ${skipped}` : ''}`,
+      error: result.added.length === 0 && problems ? problems : null,
+      notice: `Added ${result.added.length} document(s).${result.added.length > 0 && problems ? ` Not used: ${problems}` : ''}`,
     };
   } catch (error) {
     return {

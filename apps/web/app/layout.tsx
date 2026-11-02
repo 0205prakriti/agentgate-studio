@@ -21,6 +21,9 @@ export default function RootLayout({
               <Link href="/models" className="hover:underline">
                 Models
               </Link>
+              <Link href="/security" className="hover:underline">
+                Security
+              </Link>
               <span className="rounded-full border border-stone-300 px-3 py-1 text-xs font-medium">
                 Local workspace
               </span>
@@ -31,7 +34,8 @@ export default function RootLayout({
           {children}
         </main>
         <footer className="mx-auto max-w-6xl px-5 py-8 text-xs text-stone-600 sm:px-10">
-          Phase 1 · Foundation in progress · Security scanning is not connected.
+          Phase 1 · In progress · Security checks reduce risk; they are not a
+          guarantee.
         </footer>
       </body>
     </html>

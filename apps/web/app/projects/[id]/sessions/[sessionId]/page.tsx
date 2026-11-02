@@ -23,8 +23,9 @@ export default async function SessionPage({
     (run) => run.status === 'queued' || run.status === 'running',
   );
   const completed = runs.filter((run) => run.status === 'completed');
-  const lastFailure =
-    runs.at(-1)?.status === 'failed' ? runs.at(-1) : undefined;
+  const lastFailure = ['failed', 'blocked'].includes(runs.at(-1)?.status ?? '')
+    ? runs.at(-1)
+    : undefined;
   return (
     <>
       <Link
@@ -41,7 +42,10 @@ export default async function SessionPage({
       </h1>
       {lastFailure?.error && (
         <p role="alert" className="mb-6 text-sm text-red-800">
-          Last run failed: {lastFailure.error}
+          {lastFailure.status === 'blocked'
+            ? 'Last run was blocked'
+            : 'Last run failed'}
+          : {lastFailure.error}
         </p>
       )}
       <SessionChat

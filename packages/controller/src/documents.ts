@@ -36,6 +36,7 @@ export const passageSchema = z
   .object({
     documentId: z.uuid(),
     title: z.string(),
+    path: z.string(),
     seq: z.number().int(),
     text: z.string(),
   })
@@ -62,12 +63,25 @@ export interface DocumentRepository {
   list(projectId: string): Document[];
   remove(projectId: string, id: string): void;
   search(projectId: string, ftsQuery: string, limit: number): Passage[];
+  quarantine(projectId: string, id: string): void;
 }
 
 export type ReferenceResult = {
   added: Document[];
+  quarantined: { document: Document; reason: string }[];
   skipped: { path: string; reason: string }[];
 };
+
+/** Decides whether an ingested document may be used; throws if it could not be checked. */
+export type DocumentScreen = (
+  document: {
+    projectId: string;
+    documentId: string;
+    title: string;
+    path: string;
+  },
+  chunks: string[],
+) => Promise<{ allowed: true } | { allowed: false; reason: string }>;
 
 /** Splits on blank lines, then packs paragraphs into chunks of bounded size. */
 export function chunkText(text: string): string[] {
@@ -145,6 +159,14 @@ export class SqliteDocuments implements DocumentRepository {
     );
   }
 
+  quarantine(projectId: string, id: string): void {
+    this.db
+      .prepare(
+        "UPDATE documents SET status = 'quarantined' WHERE project_id = ? AND id = ?",
+      )
+      .run(projectId, id);
+  }
+
   remove(projectId: string, id: string): void {
     this.db.transaction(() => {
       const owned = this.db
@@ -165,7 +187,7 @@ export class SqliteDocuments implements DocumentRepository {
     return z.array(passageSchema).parse(
       this.db
         .prepare(
-          `SELECT d.id AS documentId, d.title, c.seq, c.text
+          `SELECT d.id AS documentId, d.title, d.path, c.seq, c.text
            FROM chunks_fts f
            JOIN chunks c ON c.id = f.rowid
            JOIN documents d ON d.id = c.document_id
@@ -185,6 +207,7 @@ export class DocumentService {
     private readonly repository: DocumentRepository,
     private readonly projects: ProjectRepository,
     root: string | null,
+    private readonly screen: DocumentScreen,
   ) {
     this.root = root === null ? null : realpathSync(resolve(root));
   }
@@ -193,7 +216,7 @@ export class DocumentService {
     return this.root !== null;
   }
 
-  reference(input: unknown): ReferenceResult {
+  async reference(input: unknown): Promise<ReferenceResult> {
     const { projectId, path } = referenceSchema.parse(input);
     if (!this.projects.find(projectId)) throw new Error('Unknown project.');
     const target = this.confine(path);
@@ -207,7 +230,7 @@ export class DocumentService {
     const existing = new Set(
       this.repository.list(projectId).map((document) => document.path),
     );
-    const result: ReferenceResult = { added: [], skipped: [] };
+    const result: ReferenceResult = { added: [], quarantined: [], skipped: [] };
     for (const file of files) {
       const display = this.display(file);
       const skip = (reason: string) =>
@@ -235,15 +258,34 @@ export class DocumentService {
         projectId,
         title: titleOf(text, file),
         path: display,
-        status: 'active' as const,
         createdAt: new Date().toISOString(),
       };
-      this.repository.add({ ...metadata, chunks });
-      result.added.push(
-        documentSchema.parse({ ...metadata, chunkCount: chunks.length }),
+      const verdict = await this.screen(
+        {
+          projectId,
+          documentId: metadata.id,
+          title: metadata.title,
+          path: display,
+        },
+        chunks,
       );
+      const status = verdict.allowed
+        ? ('active' as const)
+        : ('quarantined' as const);
+      this.repository.add({ ...metadata, status, chunks });
+      const document = documentSchema.parse({
+        ...metadata,
+        status,
+        chunkCount: chunks.length,
+      });
+      if (verdict.allowed) result.added.push(document);
+      else result.quarantined.push({ document, reason: verdict.reason });
     }
     return result;
+  }
+
+  quarantine(projectId: string, documentId: string): void {
+    this.repository.quarantine(projectId, documentId);
   }
 
   list(projectId: unknown): Document[] {

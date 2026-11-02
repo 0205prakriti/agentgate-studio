@@ -50,7 +50,9 @@ Browser end-to-end and mobile checks, restart recovery, invalid credentials, dis
 
 ## Status
 
-A1–A3 and B are complete. C, D, and E are planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+A1–A3, B, and C are complete. D and E are planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+
+C limitations: model text is held until the answer has been inspected, so answers appear after generation completes rather than token by token. Prompt-injection detection is LLM Guard's `PromptInjection` scanner (threshold 0.9, chunked); it can miss attacks and flag benign text. Deterministic rules cover a small set of credential formats, destructive operations, and data-carrying links. The scanner is a separate local service that must be started (`npm run scanner`).
 
 B limitations: the reference folder (`AGENTGATE_DOCS_ROOT`) is the only place documents are read from, and only `.md`/`.txt` files up to 200 KB; the tiny local models used for verification (0.4–0.5B parameters) often answer poorly even with correct context, so answer quality is not asserted by automated tests. Deterministic secret rules cover well-known credential formats only.
 
@@ -87,3 +89,11 @@ No Git remote was supplied. Local commits are possible; hosted GitHub Actions ev
 - Tests: context rendering/persistence/credential rejection, FTS5 retrieval with source attribution, project scoping, restart persistence, FTS operator neutralization, path confinement (traversal, absolute, symlink file and directory), secret/oversized/empty file exclusion, and that context reaches the system prompt while excerpts reach the model call only and are not stored in history.
 - Real models (`qwen2.5:0.5b`, `smollm2:360m`): both recalled a goal stored in the shared context; `smollm2` answered from retrieved sample documents (30-day returns, 45 dollar expedited shipping), and every answer lists its retrieved sources.
 - Chrome E2E: one project, shared context and references added, two sessions on two models, each showing retrieved sources and the same context preview.
+
+## C verification evidence
+
+- Pipeline: input check (secrets, disallowed operations, LLM Guard) → retrieval → LLM Guard scan of retrieved passages → generation → output inspection → deliver or block. Documents are also scanned at ingestion and quarantined (kept but never retrieved).
+- Every block or quarantine is stored with stage, rule, source, outcome, timestamp, score, and a secret-free excerpt, and shown on the Security page.
+- Tests: deterministic rules; blocked tasks never reach the model; answers with secrets or exfiltration links are withheld and not persisted; scanner unreachable/timeout/HTTP error/malformed/wrong-shape/wrong-count all fail closed for input, retrieval, and ingestion (real local HTTP servers); ingestion and retrieval-time quarantine.
+- Live (`AGENTGATE_SCANNER_URL`): with the real LLM Guard model, the three benign sample documents are ingested, `fixtures/attack/poisoned-faq.md` is quarantined, a normal question completes, and a real injection prompt is blocked.
+- Chrome E2E against the real scanner and Ollama: quarantine of the poisoned document and a blocked injection prompt are visible with rule, source, and score on the Security page.

@@ -64,8 +64,37 @@ CREATE TABLE chunks (
 ) STRICT;
 CREATE VIRTUAL TABLE chunks_fts USING fts5(text, tokenize = 'porter unicode61');`;
 
+const SECURITY = `
+CREATE TABLE runs_new (
+  id TEXT PRIMARY KEY NOT NULL,
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  prompt TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('queued','running','completed','failed','cancelled','blocked')),
+  error TEXT,
+  created_at TEXT NOT NULL,
+  finished_at TEXT
+) STRICT;
+INSERT INTO runs_new SELECT id, session_id, prompt, status, error, created_at, finished_at FROM runs;
+DROP TABLE runs;
+ALTER TABLE runs_new RENAME TO runs;
+CREATE TABLE security_events (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL,
+  run_id TEXT,
+  document_id TEXT,
+  stage TEXT NOT NULL CHECK(stage IN ('input','ingestion','retrieval','output')),
+  rule TEXT NOT NULL,
+  source TEXT NOT NULL,
+  outcome TEXT NOT NULL CHECK(outcome IN ('blocked','quarantined','excluded')),
+  detail TEXT NOT NULL,
+  evidence TEXT,
+  score REAL,
+  created_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX security_events_by_time ON security_events(created_at DESC);`;
+
 /** Ordered migrations; PRAGMA user_version is the number applied. Never edit an applied entry. */
-const MIGRATIONS = [PROJECTS, SESSIONS, CONTEXT_AND_DOCUMENTS];
+const MIGRATIONS = [PROJECTS, SESSIONS, CONTEXT_AND_DOCUMENTS, SECURITY];
 
 /** Single owner of the application database file, schema, and migrations. */
 export function openDatabase(filename: string): Database.Database {
@@ -85,10 +114,15 @@ export function openDatabase(filename: string): Database.Database {
       version > MIGRATIONS.length
     )
       throw new Error('Unsupported database version.');
+    // Table rebuilds need foreign keys off (SQLite's documented procedure); verify afterwards.
+    db.pragma('foreign_keys = OFF');
     db.transaction(() => {
       MIGRATIONS.slice(version).forEach((migration) => db.exec(migration));
+      if ((db.pragma('foreign_key_check') as unknown[]).length > 0)
+        throw new Error('Migration left inconsistent foreign keys.');
       db.pragma(`user_version = ${MIGRATIONS.length}`);
     })();
+    db.pragma('foreign_keys = ON');
     return db;
   } catch (error) {
     db.close();

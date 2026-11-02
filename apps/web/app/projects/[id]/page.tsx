@@ -202,6 +202,14 @@ export default async function ProjectPage({
                     {document.path} · {document.chunkCount} passages ·{' '}
                     {document.status}
                   </span>
+                  {document.status === 'quarantined' && (
+                    <>
+                      {' '}
+                      <Link href="/security" className="text-red-800 underline">
+                        Quarantined: not used in answers (see why)
+                      </Link>
+                    </>
+                  )}
                 </span>
                 <form action={removeReference}>
                   <input type="hidden" name="projectId" value={project.id} />

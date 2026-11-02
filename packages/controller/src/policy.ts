@@ -26,3 +26,42 @@ export function detectSecrets(text: string): string[] {
     ({ rule }) => rule,
   );
 }
+
+const DISALLOWED_OPERATIONS: readonly { rule: string; pattern: RegExp }[] = [
+  {
+    rule: 'destructive-shell',
+    pattern: /\brm\s+-[a-z]*r[a-z]*f?\s+\/|\bmkfs\b|\bformat\s+c:/i,
+  },
+  {
+    rule: 'destructive-sql',
+    pattern: /\bdrop\s+(?:table|database)\b|\btruncate\s+table\b/i,
+  },
+  {
+    rule: 'remote-code-execution',
+    pattern: /\b(?:curl|wget)\b[^\n|]*\|\s*(?:sh|bash|zsh)\b/i,
+  },
+];
+
+/** Operations no agent in this application may be asked to perform. First matching rule, or null. */
+export function detectDisallowedOperation(text: string): string | null {
+  return (
+    DISALLOWED_OPERATIONS.find(({ pattern }) => pattern.test(text))?.rule ??
+    null
+  );
+}
+
+/** Markdown images/links that carry data in a URL query are a common exfiltration channel. */
+const EXFILTRATION_LINK = /!?\[[^\]]*\]\(\s*https?:\/\/[^)\s]*\?[^)\s]+\)/i;
+export function detectExfiltrationLink(text: string): boolean {
+  return EXFILTRATION_LINK.test(text);
+}
+
+/** A short, secret-free excerpt that is safe to store and show; null when it cannot be made safe. */
+export function safeExcerpt(text: string, max = 160): string | null {
+  if (detectSecrets(text).length > 0) return null;
+  const clean = text
+    .replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > max ? `${clean.slice(0, max)}…` : clean || null;
+}

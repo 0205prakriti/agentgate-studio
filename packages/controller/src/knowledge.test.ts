@@ -29,6 +29,7 @@ import {
   toFtsQuery,
   type AgentModels,
 } from './index';
+import { markerScanner, protection } from './test-support';
 
 const directories: string[] = [];
 const closers: (() => void)[] = [];
@@ -59,11 +60,9 @@ function setup(withRoot = true) {
       projectRepository,
       projects: new ProjectService(projectRepository),
       context: new ContextService(new SqliteContext(db), projectRepository),
-      documents: new DocumentService(
-        new SqliteDocuments(db),
-        projectRepository,
-        withRoot ? root : null,
-      ),
+      guard: protection(db, markerScanner()).guard,
+      documents: protection(db, markerScanner(), withRoot ? root : null)
+        .documents,
     };
   };
   return { base, root, filename, open, ...open() };
@@ -151,7 +150,7 @@ describe('shared project context', () => {
 });
 
 describe('reference documents and retrieval', () => {
-  it('ingests a folder, retrieves attributed passages, and survives restart', () => {
+  it('ingests a folder, retrieves attributed passages, and survives restart', async () => {
     const { root, open, projects, documents, db } = setup();
     writeFileSync(
       join(root, 'returns.md'),
@@ -163,7 +162,10 @@ describe('reference documents and retrieval', () => {
     );
     writeFileSync(join(root, 'image.png'), 'ignored');
     const project = projects.create({ name: 'P' });
-    const result = documents.reference({ projectId: project.id, path: '.' });
+    const result = await documents.reference({
+      projectId: project.id,
+      path: '.',
+    });
     expect(result.added.map((d) => d.title).sort()).toEqual([
       'Returns',
       'shipping',
@@ -179,15 +181,14 @@ describe('reference documents and retrieval', () => {
     expect(reopened.documents.retrieve(project.id, 'refunds')[0]?.title).toBe(
       'Returns',
     );
-    expect(
-      reopened.documents.reference({
-        projectId: project.id,
-        path: 'returns.md',
-      }).skipped[0]?.reason,
-    ).toBe('Already referenced.');
+    const again = await reopened.documents.reference({
+      projectId: project.id,
+      path: 'returns.md',
+    });
+    expect(again.skipped[0]?.reason).toBe('Already referenced.');
   });
 
-  it('keeps retrieval scoped to the project and removes documents completely', () => {
+  it('keeps retrieval scoped to the project and removes documents completely', async () => {
     const { root, projects, documents } = setup();
     writeFileSync(
       join(root, 'a.md'),
@@ -195,10 +196,9 @@ describe('reference documents and retrieval', () => {
     );
     const first = projects.create({ name: 'One' });
     const second = projects.create({ name: 'Two' });
-    const [added] = documents.reference({
-      projectId: first.id,
-      path: 'a.md',
-    }).added;
+    const [added] = (
+      await documents.reference({ projectId: first.id, path: 'a.md' })
+    ).added;
     expect(documents.retrieve(second.id, 'zebra')).toEqual([]);
     expect(documents.retrieve(first.id, 'zebra')).toHaveLength(1);
     documents.remove(second.id, added?.id);
@@ -207,7 +207,7 @@ describe('reference documents and retrieval', () => {
     expect(documents.retrieve(first.id, 'zebra')).toEqual([]);
   });
 
-  it('confines paths to the reference folder, including through symlinks', () => {
+  it('confines paths to the reference folder, including through symlinks', async () => {
     const { base, root, projects, documents } = setup();
     writeFileSync(join(base, 'outside.md'), '# Outside\n\nPrivate notes.');
     symlinkSync(join(base, 'outside.md'), join(root, 'link.md'));
@@ -221,14 +221,14 @@ describe('reference documents and retrieval', () => {
       'missing.md',
       'a\0b',
     ])
-      expect(
-        () => documents.reference({ projectId: project.id, path }),
+      await expect(
+        documents.reference({ projectId: project.id, path }),
         path,
-      ).toThrow();
+      ).rejects.toThrow();
     expect(documents.list(project.id)).toEqual([]);
   });
 
-  it('excludes secret-bearing, oversized, and empty files and reports why', () => {
+  it('excludes secret-bearing, oversized, and empty files and reports why', async () => {
     const { root, projects, documents } = setup();
     writeFileSync(
       join(root, 'secret.md'),
@@ -238,7 +238,10 @@ describe('reference documents and retrieval', () => {
     writeFileSync(join(root, 'empty.md'), '   ');
     writeFileSync(join(root, 'ok.md'), '# Fine\n\nHarmless text.');
     const project = projects.create({ name: 'P' });
-    const result = documents.reference({ projectId: project.id, path: '.' });
+    const result = await documents.reference({
+      projectId: project.id,
+      path: '.',
+    });
     expect(result.added.map((d) => d.title)).toEqual(['Fine']);
     expect(result.skipped.map((s) => s.path).sort()).toEqual([
       'big.md',
@@ -250,13 +253,13 @@ describe('reference documents and retrieval', () => {
     );
   });
 
-  it('refuses to reference anything when no folder is configured', () => {
+  it('refuses to reference anything when no folder is configured', async () => {
     const { projects, documents } = setup(false);
     const project = projects.create({ name: 'P' });
     expect(documents.configured).toBe(false);
-    expect(() =>
+    await expect(
       documents.reference({ projectId: project.id, path: '.' }),
-    ).toThrow('No reference');
+    ).rejects.toThrow('No reference');
   });
 
   it('neutralizes FTS operators and chunks long text within bounds', () => {
@@ -277,7 +280,7 @@ describe('reference documents and retrieval', () => {
 
 describe('knowledge reaches the model', () => {
   it('injects context into the system prompt and untrusted excerpts into the call only', async () => {
-    const { root, db, projects, context, documents } = setup();
+    const { root, db, projects, context, documents, guard } = setup();
     writeFileSync(
       join(root, 'returns.md'),
       '# Returns\n\nRefunds take 7 business days.',
@@ -288,7 +291,7 @@ describe('knowledge reaches the model', () => {
       kind: 'goal',
       text: 'Answer support questions',
     });
-    documents.reference({ projectId: project.id, path: 'returns.md' });
+    await documents.reference({ projectId: project.id, path: 'returns.md' });
     const faux = fauxProvider();
     const registry = createModels();
     registry.setProvider(faux.provider);
@@ -313,6 +316,7 @@ describe('knowledge reaches the model', () => {
     const repository = new SqliteSessions(db);
     const sessions = new SessionService(repository, new SqliteProjects(db));
     const runner = new RunService(repository, models, {
+      guard,
       knowledge: {
         context: (id) => context.render(id),
         retrieve: (id, query) => documents.retrieve(id, query),

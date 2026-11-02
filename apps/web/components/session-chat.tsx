@@ -36,17 +36,20 @@ export function SessionChat({
   useEffect(() => {
     if (!runId) return;
     setLive('');
-    setStatus('Waiting for the model…');
+    setStatus('Generating and checking the answer…');
     const source = new EventSource(`/api/runs/${runId}/events`);
     source.onmessage = (message: MessageEvent<string>) => {
       const event = JSON.parse(message.data) as StreamEvent;
       if (event.type === 'text_delta') {
-        setStatus('Streaming…');
+        setStatus('Delivering checked answer…');
         setLive((current) => current + event.text);
-      } else if (event.type === 'failed' || event.type === 'cancelled') {
-        setError(event.type === 'failed' ? event.text : 'Run cancelled.');
+      } else if (event.type === 'cancelled') {
+        // Failed and blocked runs are shown by the page itself after the refresh below.
+        setError('Run cancelled.');
       }
-      if (['completed', 'failed', 'cancelled'].includes(event.type)) {
+      if (
+        ['completed', 'failed', 'cancelled', 'blocked'].includes(event.type)
+      ) {
         source.close();
         setRunId(null);
         setStatus(null);

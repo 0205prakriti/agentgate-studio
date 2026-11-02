@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { projectIdSchema } from '@agentgate/controller';
-import { projects } from '@/lib/controller';
+import { ollama, projects, sessions } from '@/lib/controller';
+import { StartSession } from '@/components/start-session';
 import { Button } from '@/components/ui/button';
 export const dynamic = 'force-dynamic';
 export default async function ProjectPage({
@@ -13,6 +14,14 @@ export default async function ProjectPage({
   if (!projectIdSchema.safeParse(id).success) notFound();
   const project = projects().find(id);
   if (!project) notFound();
+  const sessionList = sessions().listSessions(project.id);
+  const installed = await ollama()
+    .listInstalled()
+    .then((models) => ({ models, error: null }))
+    .catch((error: unknown) => ({
+      models: null,
+      error: error instanceof Error ? error.message : 'Ollama is unavailable.',
+    }));
   return (
     <>
       <Link href="/" className="text-sm text-teal-800 hover:underline">
@@ -48,13 +57,46 @@ export default async function ProjectPage({
           </div>
         </dl>
       </section>
-      <div className="mt-6 rounded-xl border border-teal-900/20 bg-teal-50 p-6">
-        <h2 className="font-semibold">Next: connect a model</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-700">
-          Model selection, agent sessions, and task execution are the next
-          foundation slice. This project does not run an agent yet.
-        </p>
-      </div>
+      <section
+        aria-labelledby="sessions-title"
+        className="mt-6 rounded-xl border border-stone-300 bg-white p-6 sm:p-8"
+      >
+        <h2 id="sessions-title" className="text-xl font-semibold">
+          Agent sessions
+        </h2>
+        {sessionList.length > 0 && (
+          <ul className="mt-4 space-y-2">
+            {sessionList.map((session) => (
+              <li key={session.id}>
+                <Link
+                  href={`/projects/${project.id}/sessions/${session.id}`}
+                  className="text-sm text-teal-800 hover:underline"
+                >
+                  {session.model.modelId} ·{' '}
+                  {session.createdAt.slice(0, 16).replace('T', ' ')} UTC
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-6">
+          {installed.models ? (
+            installed.models.length > 0 ? (
+              <StartSession projectId={project.id} models={installed.models} />
+            ) : (
+              <p className="text-sm text-stone-700">
+                Ollama is running but has no models. Run{' '}
+                <code>ollama pull qwen2.5:0.5b</code> and reload.
+              </p>
+            )
+          ) : (
+            <p role="alert" className="text-sm text-red-800">
+              {installed.error} Start it with <code>ollama serve</code> and
+              reload.
+            </p>
+          )}
+        </div>
+      </section>
       <Button asChild variant="outline" className="mt-8">
         <Link href="/">Back to workspace</Link>
       </Button>

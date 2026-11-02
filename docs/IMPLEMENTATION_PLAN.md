@@ -6,7 +6,7 @@ The initial workspace contained AGENTS.md, docs/phase1.md, and docs/ARCHITECTURE
 
 The user's stack instruction selects **LLM Guard plus deterministic policies**, superseding the spec's Prompt Guard 2 selection. Use LLM Guard's existing prompt-injection scanner; no new classifier and no claim of complete protection. The small Python scanner boundary exists because the scanner is Python, not to split the application into microservices.
 
-Use a single Node controller library, imported by the local Next.js server, with domain contracts and SQLite infrastructure separated from UI. Add a separate bounded worker process when agent execution/evaluations arrive; do not attach background work to HTTP lifetimes. SQLite owns application records. Decide canonical Pi history storage when integrating Pi; do not duplicate histories in SQLite and Pi session files.
+Use a single Node controller library, imported by the local Next.js server, with domain contracts and SQLite infrastructure separated from UI. Agent execution runs in a bounded in-process runner owned by the controller (one run at a time, 120 s deadline, durable queue in SQLite), never inside an HTTP request. Evaluations get a separate process only if they need isolation. SQLite owns application records. SQLite is the canonical owner of Pi message history (Pi's agent core keeps it in memory only); stored messages are replayed into a fresh agent for each run.
 
 ## Dependency reuse
 
@@ -50,7 +50,9 @@ Browser end-to-end and mobile checks, restart recovery, invalid credentials, dis
 
 ## Status
 
-A1 complete: project creation, listing, and reopening are implemented and verified. No full milestone is complete yet. A2–E are planned work, not technical debt. Debt review: no known deferred technical debt in the implemented A1 paths.
+A1 and A2 are complete. A3 (cloud credentials), B, C, D, and E are planned work, not technical debt. A2 grants agents no tools (no filesystem or shell).
+
+A2 limitations: one model provider (Ollama); a cancel issued while a model is still being opened is ignored; the Ollama OpenAI-compatible endpoint uses Ollama's default context length.
 
 No Git remote was supplied. Local commits are possible; hosted GitHub Actions evidence requires a configured repository and pushed workflow.
 
@@ -62,3 +64,10 @@ No Git remote was supplied. Local commits are possible; hosted GitHub Actions ev
 - Workspace visually inspected at desktop and 390px mobile viewport; full Phase 1 browser automation remains milestone E work.
 - `npm audit`: zero known vulnerabilities at verification time. Biome replaces the initially evaluated ESLint stack to avoid its reported vulnerable minimatch dependency tree.
 - Local verification used isolated data under ignored `.agentgate/verification`; no model calls or scanner detections were simulated.
+
+## A2 verification evidence
+
+- `npm run check`: typecheck, Biome, Prettier, Vitest, and production build.
+- Controller tests (Pi's own faux provider for deterministic cases): streamed events, transcript replay into the next turn, restart reopen, model failure and unopenable model, hard timeout and cancel, interrupted-run recovery, corrupt transcript rejection, one active run per session.
+- Live integration (needs `AGENTGATE_OLLAMA_URL` and `AGENTGATE_OLLAMA_MODEL`): a real task through Pi and Ollama `qwen2.5:0.5b`, plus rejection of a model that is not installed.
+- Browser E2E (`npm run test:e2e`, `AGENTGATE_E2E_MODEL=<model>`): Chrome against the production server created a project, a session, streamed a real answer, and reloaded the persisted conversation. With Ollama unreachable the project page shows how to start it.

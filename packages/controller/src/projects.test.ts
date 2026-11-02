@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ProjectService, SqliteProjects } from './index';
+import { ProjectService, SqliteProjects, openDatabase } from './index';
 
 const directories: string[] = [];
-const connections: SqliteProjects[] = [];
+const connections: Database.Database[] = [];
 afterEach(() => {
   for (const connection of connections.splice(0)) connection.close();
   for (const directory of directories.splice(0))
@@ -17,22 +17,27 @@ function setup() {
   const directory = mkdtempSync(join(tmpdir(), 'agentgate-'));
   directories.push(directory);
   const filename = join(directory, 'workspace', 'agentgate.sqlite');
-  const repository = new SqliteProjects(filename);
-  connections.push(repository);
-  return { filename, repository, service: new ProjectService(repository) };
+  const db = openDatabase(filename);
+  connections.push(db);
+  return {
+    filename,
+    db,
+    service: new ProjectService(new SqliteProjects(db)),
+  };
 }
 
 describe('project persistence vertical slice', () => {
   it('creates a project and reopens the same data after the connection restarts', () => {
-    const { filename, repository, service } = setup();
+    const { filename, db, service } = setup();
     const project = service.create({ name: '  Reference RAG  ' });
     expect(project.name).toBe('Reference RAG');
-    repository.close();
+    db.close();
     connections.pop();
-    const reopened = new SqliteProjects(filename);
+    const reopened = openDatabase(filename);
     connections.push(reopened);
-    expect(new ProjectService(reopened).list()).toEqual([project]);
-    expect(new ProjectService(reopened).find(project.id)).toEqual(project);
+    const restarted = new ProjectService(new SqliteProjects(reopened));
+    expect(restarted.list()).toEqual([project]);
+    expect(restarted.find(project.id)).toEqual(project);
     expect(statSync(filename).mode & 0o777).toBe(0o600);
   });
 
@@ -77,12 +82,12 @@ describe('project persistence vertical slice', () => {
   });
 
   it('refuses unknown database versions without rewriting them', () => {
-    const { filename, repository } = setup();
-    repository.close();
+    const { filename, db } = setup();
+    db.close();
     connections.pop();
     const raw = new Database(filename);
     raw.pragma('user_version = 99');
-    expect(() => new SqliteProjects(filename)).toThrow(
+    expect(() => openDatabase(filename)).toThrow(
       'Unsupported database version',
     );
     expect(raw.pragma('user_version', { simple: true })).toBe(99);

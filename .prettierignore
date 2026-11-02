@@ -4,3 +4,5 @@ package-lock.json
 AGENTS.md
 docs/phase1.md
 next-env.d.ts
+test-results
+playwright-report

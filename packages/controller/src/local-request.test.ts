@@ -1,5 +1,5 @@
-import { expect, it } from 'vitest';
-import { isLocalMutation } from './local-request';
+import { describe, expect, it } from 'vitest';
+import { isLocalHost, isLocalMutation } from './local-request';
 it.each([
   ['http://127.0.0.1:3000', '127.0.0.1:3000', true],
   ['http://localhost:3000', 'localhost:3000', true],
@@ -22,3 +22,22 @@ it.each([
     expect(isLocalMutation(origin, host)).toBe(allowed);
   },
 );
+
+describe('isLocalHost', () => {
+  it.each(['127.0.0.1:3000', 'localhost:3000', '[::1]:3000'])(
+    'accepts %s',
+    (host) => {
+      expect(isLocalHost(host)).toBe(true);
+    },
+  );
+  it.each([
+    null,
+    '',
+    'evil.example',
+    'evil.example:3000',
+    'localhost.evil.example',
+    '127.0.0.1@evil.example',
+  ])('rejects %s', (host) => {
+    expect(isLocalHost(host)).toBe(false);
+  });
+});

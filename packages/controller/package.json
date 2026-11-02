@@ -5,6 +5,9 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
+    "@earendil-works/pi-agent-core": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@napi-rs/keyring": "2.1.2",
     "better-sqlite3": "13.0.3",
     "zod": "4.6.7"
   }

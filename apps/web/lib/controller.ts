@@ -11,7 +11,10 @@ import {
   SqliteDocuments,
   KeychainBackend,
   ModelRouter,
+  DEFAULT_OLLAMA_URL,
+  DEFAULT_SCANNER_URL,
   LlmGuardScanner,
+  ModelPuller,
   OllamaCatalog,
   ProtectionPipeline,
   SqliteSecurityEvents,
@@ -36,6 +39,8 @@ type Controller = {
   security: SqliteSecurityEvents;
   evals: EvalService;
   repoRoot: string;
+  puller: ModelPuller;
+  endpoints: { ollamaUrl: string; scannerUrl: string; docsRoot: string | null };
 };
 const globalController = globalThis as typeof globalThis & {
   controller?: Controller;
@@ -110,6 +115,16 @@ function controller(): Controller {
       security,
       evals,
       repoRoot,
+      puller: new ModelPuller(process.env.AGENTGATE_OLLAMA_URL),
+      endpoints: {
+        ollamaUrl: new URL(
+          process.env.AGENTGATE_OLLAMA_URL ?? DEFAULT_OLLAMA_URL,
+        ).origin,
+        scannerUrl: new URL(
+          process.env.AGENTGATE_SCANNER_URL ?? DEFAULT_SCANNER_URL,
+        ).origin,
+        docsRoot: docsRoot ? resolve(docsRoot) : null,
+      },
     };
   }
   return globalController.controller;
@@ -124,3 +139,5 @@ export const documents = () => controller().documents;
 export const security = () => controller().security;
 export const evals = () => controller().evals;
 export const repoRoot = () => controller().repoRoot;
+export const puller = () => controller().puller;
+export const endpoints = () => controller().endpoints;

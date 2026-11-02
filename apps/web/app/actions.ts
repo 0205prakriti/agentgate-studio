@@ -15,6 +15,7 @@ import {
   documents,
   evals,
   projects,
+  puller,
   runs,
   sessions,
 } from '@/lib/controller';
@@ -262,4 +263,20 @@ export async function startEvaluation(form: FormData): Promise<void> {
   if (!(await isLocalRequest())) return;
   await evals().enqueue(form.get('profile'));
   revalidatePath('/evaluations');
+}
+
+export type PullResult = { error: string | null };
+export async function pullModel(model: string): Promise<PullResult> {
+  if (!(await isLocalRequest()))
+    return { error: 'Requests must come from this local workspace.' };
+  try {
+    puller().start(model);
+  } catch (error) {
+    return { error: userMessage(error, 'The download could not be started.') };
+  }
+  return { error: null };
+}
+
+export async function cancelPull(): Promise<void> {
+  if (await isLocalRequest()) puller().cancel();
 }

@@ -188,3 +188,39 @@ test('the dashboard runs the required suite, and a deliberately weak configurati
   );
   await expect(weak).not.toContainText('functional /');
 });
+
+test('a local model can be installed from the Models page with visible progress', async ({
+  page,
+}) => {
+  const ollamaUrl = process.env.AGENTGATE_OLLAMA_URL;
+  test.skip(!ollamaUrl, 'Set AGENTGATE_OLLAMA_URL to a running Ollama.');
+  const tiny = 'smollm2:135m';
+  try {
+    await page.goto('/models');
+    await expect(page.getByText('System check')).toBeVisible();
+    await expect(page.getByText('Best fit')).toBeVisible();
+
+    await page.getByLabel('Another Ollama model').fill('bad name!');
+    await page
+      .getByRole('button', { name: 'Install', exact: true })
+      .last()
+      .click();
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'Use an Ollama model name' }),
+    ).toBeVisible();
+
+    await page.getByLabel('Another Ollama model').fill(tiny);
+    await page
+      .getByRole('button', { name: 'Install', exact: true })
+      .last()
+      .click();
+    await expect(
+      page.getByRole('list', { name: 'Installed local models' }),
+    ).toContainText(tiny, { timeout: 180_000 });
+  } finally {
+    await fetch(`${ollamaUrl}/api/delete`, {
+      method: 'DELETE',
+      body: JSON.stringify({ model: tiny }),
+    });
+  }
+});

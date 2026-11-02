@@ -121,9 +121,9 @@ export default async function ProjectPage({
             <StartSession projectId={project.id} groups={groups} />
           ) : (
             <p role="alert" className="text-sm text-red-800">
-              No models are available. Pull an Ollama model or{' '}
+              No models are available.{' '}
               <Link href="/models" className="underline">
-                connect a cloud provider
+                Install a local model or connect a cloud provider
               </Link>
               .
             </p>

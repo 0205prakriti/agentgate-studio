@@ -4,26 +4,26 @@ A local web app for running Pi agent sessions on Ollama or cloud models, with sh
 
 ## Setup
 
-Requirements: Node.js 24 (`nvm use`), npm, [Ollama](https://ollama.com) for local models, and Python 3.11 for the scanner.
+Requirements: Node.js 24 (`nvm use`) and npm. The setup script installs the rest after asking.
 
 ```sh
 npm ci
-ollama serve &                 # then: ollama pull qwen2.5:0.5b
-npm run scanner:setup          # one-time: LLM Guard in scanner/.venv (large download)
-npm run scanner &              # prompt-injection scanner on 127.0.0.1:8765
-AGENTGATE_DOCS_ROOT="$PWD/fixtures" npm run dev
+npm run setup    # installs Ollama (Homebrew on macOS) and the security scanner if missing
+npm start        # starts Ollama, the scanner, and the app, then opens the Models page
 ```
 
-Open http://127.0.0.1:3000.
+On the Models page, press **Install** on the model marked "Best fit" for your computer's memory. You can then start a project and a session. `npm start` builds the app on first run; use `npm start -- --rebuild` after pulling changes.
 
-| Variable                | Purpose                                            |
-| ----------------------- | -------------------------------------------------- |
-| `AGENTGATE_DATA_DIR`    | SQLite location (default `~/.agentgate`)           |
-| `AGENTGATE_DOCS_ROOT`   | Only folder reference documents may be read from   |
-| `AGENTGATE_OLLAMA_URL`  | Ollama endpoint (default `http://127.0.0.1:11434`) |
-| `AGENTGATE_SCANNER_URL` | Scanner endpoint (default `http://127.0.0.1:8765`) |
+| Variable                | Purpose                                                                |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `AGENTGATE_DATA_DIR`    | SQLite location (default `~/.agentgate`)                               |
+| `AGENTGATE_DOCS_ROOT`   | Only folder reference documents may be read from (default `fixtures/`) |
+| `AGENTGATE_OLLAMA_URL`  | Ollama endpoint (default `http://127.0.0.1:11434`)                     |
+| `AGENTGATE_SCANNER_URL` | Scanner endpoint (default `http://127.0.0.1:8765`)                     |
+| `AGENTGATE_REPO_ROOT`   | Repository folder containing `evals/` (default `../..` of the web app) |
+| `PORT`                  | App port for `npm start` (default 3000)                                |
 
-Cloud keys (Anthropic, OpenAI) are entered on the Models page, tested with one small request, and stored in the operating system's credential store, never in SQLite or on disk. Try the sample documents by referencing `rag`, and the controlled malicious document by referencing `attack`.
+Cloud keys (Anthropic, OpenAI) are entered on the Models page, tested with one small request, and stored in the operating system's credential store, never in SQLite or on disk. Try the sample documents by referencing `rag`, and the controlled malicious document by referencing `attack`. The Models page also shows a system check that says what is not running and how to fix it.
 
 ## Security notes
 
@@ -51,4 +51,5 @@ Live-service tests are skipped unless `AGENTGATE_OLLAMA_URL` + `AGENTGATE_OLLAMA
 - The tiny local models used in verification (0.4–0.5B parameters) often answer poorly even with correct context; automated tests assert retrieval, context, and enforcement, not answer quality.
 - The required evaluation suite uses a scripted model fixture. It proves the application stops unsafe content whatever a model says, not that any real model behaves safely. No live-model evaluation suite exists.
 - Browser E2E needs Ollama and the scanner, so it is run locally, not in CI.
-- The scanner and Ollama are separate local processes the user starts; the app reports when they are unreachable.
+- `npm run setup` installs Ollama automatically only on macOS with Homebrew; on other systems it links to the download. Model downloads are tracked in memory (Ollama resumes a partial download after a restart). Local model sizes and memory needs on the Models page are approximate.
+- Ollama and the scanner are separate local processes. `npm start` runs them, and the app reports when they are unreachable.

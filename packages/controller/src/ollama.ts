@@ -12,7 +12,11 @@ import type { ModelRef } from './sessions';
 export const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
 const LIST_TIMEOUT_MS = 3000;
 const tagsSchema = z.object({
-  models: z.array(z.object({ name: z.string().min(1) }).loose()),
+  models: z.array(
+    z
+      .object({ name: z.string().min(1), size: z.number().nonnegative() })
+      .loose(),
+  ),
 });
 
 export interface OpenedModel {
@@ -37,7 +41,8 @@ export class OllamaCatalog implements AgentModels {
     this.baseUrl = url.origin;
   }
 
-  async listInstalled(): Promise<string[]> {
+  /** Installed models with their size on disk. */
+  async listDetailed(): Promise<{ name: string; sizeBytes: number }[]> {
     let response: Response;
     try {
       response = await fetch(`${this.baseUrl}/api/tags`, {
@@ -51,7 +56,13 @@ export class OllamaCatalog implements AgentModels {
     const parsed = tagsSchema.safeParse(await response.json());
     if (!parsed.success)
       throw new Error('Ollama returned an unexpected model list.');
-    return parsed.data.models.map((model) => model.name).sort();
+    return parsed.data.models
+      .map((model) => ({ name: model.name, sizeBytes: model.size }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async listInstalled(): Promise<string[]> {
+    return (await this.listDetailed()).map((model) => model.name);
   }
 
   async open(ref: ModelRef): Promise<OpenedModel> {

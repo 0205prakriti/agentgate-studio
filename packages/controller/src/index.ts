@@ -17,7 +17,7 @@ export {
   sessionIdSchema,
 } from './sessions';
 export type { Run, Session } from './sessions';
-export { OllamaCatalog } from './ollama';
+export { DEFAULT_OLLAMA_URL, OllamaCatalog } from './ollama';
 export type { AgentModels } from './ollama';
 export { CloudCatalog, apiKeySchema, describeProviderError } from './cloud';
 export { KeychainBackend, SecretCredentialStore } from './credentials';
@@ -37,7 +37,11 @@ export {
   detectSecrets,
   safeExcerpt,
 } from './policy';
-export { LlmGuardScanner, ScannerUnavailableError } from './scanner';
+export {
+  DEFAULT_SCANNER_URL,
+  LlmGuardScanner,
+  ScannerUnavailableError,
+} from './scanner';
 export type { InjectionScanner } from './scanner';
 export { ProtectionPipeline, SqliteSecurityEvents } from './security';
 export type { Blocked, RunGuard } from './security';
@@ -49,3 +53,12 @@ export {
   configurationIdentity,
   listGithubRuns,
 } from './evals';
+export {
+  ModelPuller,
+  RECOMMENDED_MODELS,
+  modelNameSchema,
+  recommendModels,
+} from './local-models';
+export type { PullState, RecommendedModel } from './local-models';
+export { checkServices } from './health';
+export type { ServiceCheck } from './health';

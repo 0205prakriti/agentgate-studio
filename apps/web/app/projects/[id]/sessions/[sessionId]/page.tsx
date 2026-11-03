@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { projectIdSchema, sessionIdSchema } from '@agentgate/controller';
-import { projects, sessions } from '@/lib/controller';
+import { projects, security, sessions } from '@/lib/controller';
+import { RunTraces } from '@/components/run-traces';
 import { SessionChat } from '@/components/session-chat';
 export const dynamic = 'force-dynamic';
 export default async function SessionPage({
@@ -26,6 +27,13 @@ export default async function SessionPage({
   const lastFailure = ['failed', 'blocked'].includes(runs.at(-1)?.status ?? '')
     ? runs.at(-1)
     : undefined;
+  // Cap before mapping, so trace() and forRun() are not run for every
+  // run when a session has many of them.
+  const latestRuns = runs.toReversed().slice(0, 20);
+  const traceItems = latestRuns.map((run) => ({
+    run,
+    trace: sessions().traceForRun(run, security().forRun(run.id)),
+  }));
   return (
     <>
       <Link
@@ -41,7 +49,7 @@ export default async function SessionPage({
         Agent session
       </h1>
       {lastFailure?.error && (
-        <p role="alert" className="mb-6 text-sm text-red-800">
+        <p className="mb-6 text-sm text-red-800">
           {lastFailure.status === 'blocked'
             ? 'Last run was blocked'
             : 'Last run failed'}
@@ -56,6 +64,7 @@ export default async function SessionPage({
         activeRunId={active?.id ?? null}
         activePrompt={active?.prompt ?? null}
       />
+      <RunTraces items={traceItems} totalRuns={runs.length} />
     </>
   );
 }
